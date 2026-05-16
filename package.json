@@ -1,0 +1,14 @@
+{
+  "name": "raabta-ai-orchestrator",
+  "version": "1.0.0",
+  "description": "Agentic B2B Real Estate System",
+  "main": "demandOrchestrator.js",
+  "type": "module",
+  "scripts": {
+    "start": "node demandOrchestrator.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.3",
+    "dotenv": "^16.4.1"
+  }
+}

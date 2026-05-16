@@ -2,9 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import 'dotenv/config';
 
 const ai = new GoogleGenAI({
-    vertexai: true,
-    project: process.env.GOOGLE_CLOUD_PROJECT,
-    location: 'us-central1',
+    apiKey: process.env.GEMINI_API_KEY,
 });
 
 export async function callGemini(systemPrompt, userMessage, maxTokens = 1024) {

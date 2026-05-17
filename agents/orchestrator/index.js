@@ -2,68 +2,124 @@ import { parseMessage, saveListing, saveDemand } from '../agents/gatekeeper/inde
 import { checkDuplicates } from '../agents/negotiator/index.js';
 import { findAndNotifyMatches, matchDemandToListings } from '../agents/matchmaker/index.js';
 import supabase from '../services/supabaseClient.js';
+import { logStep } from '../services/logger.js';
 
-export async function handleMessage(rawText, senderAgentId) {
+export async function handleMessage(rawText, senderAgentId, source = 'whatsapp') {
+    const sessionId = `session_${Date.now()}`;
+
     console.log(`\n${'='.repeat(55)}`);
     console.log(`[🚀 Orchestrator] Agent: ${senderAgentId}`);
     console.log(`[🚀 Orchestrator] Flow: Parse → Validate → Save → Match`);
     console.log('='.repeat(55));
 
-    // ── Agent 1: Parse ─────────────────────────────────
+    await logStep(sessionId, 'Orchestrator', 'start', 'running', rawText, '');
+
+    // ── Agent 1: Gatekeeper — Parse ───────────────────
+    await logStep(sessionId, 'Gatekeeper', 'parsing', 'running', rawText, '');
     const { parsed, preview_message, maps_link } = await parseMessage(rawText, senderAgentId);
+    await logStep(sessionId, 'Gatekeeper', 'parsed', 'done',
+        rawText,
+        `Intent: ${parsed.intent} | Block: ${parsed.block_id} | Size: ${parsed.size}gz`
+    );
 
     // ── SUPPLY FLOW ────────────────────────────────────
     if (parsed.intent === 'supply') {
 
-        // Agent 2: Duplicate check (only for public listings)
+        if (source === 'app') {
+            const savedListing = await saveListing(parsed, senderAgentId);
+            return { status: 'listing_saved', listing: savedListing };
+        }
+        // WA se aaya toh confirm maango
+        return { status: 'awaiting_confirm', parsed, preview: preview_message };
+    }
+
+    // Agent 2: Negotiator — Duplicate check (only public)
+    if (parsed.is_public) {
+        await logStep(sessionId, 'Negotiator', 'duplicate_check', 'running',
+            `Block: ${parsed.block_id}, Size: ${parsed.size}, Price: ${parsed.demand_price}`, ''
+        );
+
         const dupCheck = await checkDuplicates(parsed, senderAgentId);
+
         if (dupCheck.isDuplicate) {
+            await logStep(sessionId, 'Negotiator', 'duplicate_check', 'done',
+                '', `Conflict found — asking for line/range`
+            );
             return {
                 status: 'conflict',
                 conflict_message: dupCheck.conflictMessage,
                 parsed,
+                session_id: sessionId,
             };
         }
 
-        // Agent 1: Save listing
-        const savedListing = await saveListing(parsed, senderAgentId);
-
-        // Hot property check
-        await checkAndFlagHotProperty(savedListing);
-
-        // Agent 3: Background match (non-blocking)
-        if (parsed.is_public) {
-            findAndNotifyMatches(savedListing)
-                .catch(err => console.error('[Orchestrator] Matchmaker error:', err.message));
-        }
-
-        return {
-            status: 'listing_saved',
-            listing: savedListing,
-            preview: preview_message,
-            maps_link,
-        };
+        await logStep(sessionId, 'Negotiator', 'duplicate_check', 'done', '', 'No conflicts — clear');
     }
 
-    // ── DEMAND FLOW ────────────────────────────────────
-    if (parsed.intent === 'demand') {
+    // Human-in-loop: pehle confirm lo, phir save
+    await logStep(sessionId, 'Orchestrator', 'awaiting_confirm', 'running', '', 'Preview sent to broker');
+    return {
+        status: 'awaiting_confirm',
+        parsed,
+        preview: preview_message,
+        maps_link,
+        session_id: sessionId,
+    };
+}
 
-        // Save demand
-        const savedDemand = await saveDemand(parsed, senderAgentId);
+// ── DEMAND FLOW ────────────────────────────────────
+if (parsed.intent === 'demand') {
 
-        // Agent 3: Immediate match
-        const immediateMatches = await matchDemandToListings(parsed, senderAgentId);
+    await logStep(sessionId, 'Gatekeeper', 'saving_demand', 'running', '', '');
+    const savedDemand = await saveDemand(parsed, senderAgentId);
+    await logStep(sessionId, 'Gatekeeper', 'saving_demand', 'done', '', `ID: ${savedDemand.id}`);
 
-        return {
-            status: 'demand_saved',
-            demand: savedDemand,
-            immediate_matches: immediateMatches,
-            match_count: immediateMatches.length,
-            preview: preview_message,
-        };
+    await logStep(sessionId, 'Matchmaker', 'immediate_match', 'running',
+        `Block: ${parsed.block_id}, Budget: ${parsed.max_budget}`, ''
+    );
+    const immediateMatches = await matchDemandToListings(parsed, senderAgentId);
+    await logStep(sessionId, 'Matchmaker', 'immediate_match', 'done',
+        '', `${immediateMatches.length} match(es) found`
+    );
+
+    await logStep(sessionId, 'Orchestrator', 'complete', 'done', '',
+        `Demand saved, ${immediateMatches.length} matches`
+    );
+
+    return {
+        status: 'demand_saved',
+        demand: savedDemand,
+        immediate_matches: immediateMatches,
+        match_count: immediateMatches.length,
+        preview: preview_message,
+        session_id: sessionId,
+    };
+}
+
+return { status: 'unknown_intent', parsed };
+
+
+// Backend/WA bot ye call karega jab broker CONFIRM kare
+export async function confirmAndSave(parsedData, senderAgentId, sessionId) {
+    await logStep(sessionId, 'Gatekeeper', 'saving_listing', 'running', '', '');
+    const savedListing = await saveListing(parsedData, senderAgentId);
+    await logStep(sessionId, 'Gatekeeper', 'saving_listing', 'done', '', `ID: ${savedListing.id}`);
+
+    await checkAndFlagHotProperty(savedListing);
+
+    if (parsedData.is_public) {
+        await logStep(sessionId, 'Matchmaker', 'scanning_requests', 'running', '', '');
+        findAndNotifyMatches(savedListing)
+            .then(matches =>
+                logStep(sessionId, 'Matchmaker', 'scanning_requests', 'done', '',
+                    `${matches.length} match(es) notified`
+                )
+            )
+            .catch(err => console.error('[Matchmaker] Error:', err.message));
     }
 
-    return { status: 'unknown_intent', parsed };
+    await logStep(sessionId, 'Orchestrator', 'complete', 'done', '', `Listing saved: ${savedListing.id}`);
+    return savedListing;
 }
 
 async function checkAndFlagHotProperty(listing) {

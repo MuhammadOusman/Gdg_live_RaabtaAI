@@ -43,6 +43,8 @@ export async function generateRecommendations(agentId) {
         return { recommendations: [], message: 'Insufficient data' };
     }
 
+    const overpricedOrOversupplied = await detectOversuppliedOrOverpriced(myListings, blockStats);
+
     // ── 4. Data prepare karo Gemini ke liye ───────────
     const marketData = {
         agent_work_areas: agent?.work_areas || [],
@@ -65,8 +67,7 @@ export async function generateRecommendations(agentId) {
             const stat = blockStats.find(b => b.block_id === l.block_id);
             return stat && stat.demand_ratio > 1.5;
         }).map(l => l.block_id),
-        // Overpriced listings detect karo
-        overpriced: detectOverpriced(myListings, blockStats),
+        overpriced_or_oversupplied: overpricedOrOversupplied,
     };
 
     // ── 5. Gemini se recommendations lo ───────────────
@@ -80,8 +81,16 @@ export async function generateRecommendations(agentId) {
     try {
         recommendations = JSON.parse(responseText);
     } catch {
-        console.error('[Recommender] JSON parse failed:', responseText);
-        recommendations = [];
+        console.error('[Recommender] JSON parse failed — trying recovery...');
+        try {
+            const recoveryText = await callGemini(
+                RECOMMENDER_PROMPT,
+                `${responseText}\n\n[SYSTEM: Return ONLY a valid JSON array of recommendations.]`
+            );
+            recommendations = JSON.parse(recoveryText);
+        } catch {
+            recommendations = [];
+        }
     }
 
     console.log(`[💡 Recommender] Generated ${recommendations.length} recommendations`);
@@ -100,27 +109,64 @@ export async function generateRecommendations(agentId) {
     return { recommendations, agent_id: agentId };
 }
 
-// Helper: block average se 15%+ upar wali listings
-function detectOverpriced(myListings, blockStats) {
-    const overpriced = [];
+// Helper: block average se 15%+ upar wali listings OR low demand blocks detect karo
+async function detectOversuppliedOrOverpriced(myListings, blockStats) {
+    const overpricedOrOversupplied = [];
+    const uniqueBlocks = [...new Set(myListings.map(l => l.block_id).filter(Boolean))];
+
+    if (uniqueBlocks.length === 0) return overpricedOrOversupplied;
+
+    // Fetch all listings in the same blocks to calculate averages
+    const { data: allListings } = await supabase
+        .from('listings')
+        .select('block_id, demand_price')
+        .eq('status', 'active')
+        .eq('is_public', true)
+        .in('block_id', uniqueBlocks);
+
+    // Group by block to find average
+    const blockAverages = {};
+    if (allListings) {
+        for (const l of allListings) {
+            if (!blockAverages[l.block_id]) {
+                blockAverages[l.block_id] = { sum: 0, count: 0 };
+            }
+            blockAverages[l.block_id].sum += l.demand_price;
+            blockAverages[l.block_id].count += 1;
+        }
+    }
 
     for (const listing of myListings) {
         if (!listing.is_public) continue;
 
         const stat = blockStats.find(b => b.block_id === listing.block_id);
-        if (!stat || stat.supply < 2) continue;
+        if (!stat) continue;
 
-        // Block average price calculate karo
-        // (block_market_stats mein avg price nahi hai — listings se calculate karo)
-        // Simple heuristic: agar demand_ratio < 0.5 aur listing exist kare toh oversupplied
+        // 1. Oversupplied check (demand_ratio < 0.5)
         if (stat.demand_ratio < 0.5) {
-            overpriced.push({
+            overpricedOrOversupplied.push({
                 block: listing.block_id,
                 price: listing.demand_price,
-                note: 'Low demand area — price reconsider karo'
+                type: 'oversupplied',
+                note: 'Low demand area — supply is very high compared to demand'
             });
+            continue;
+        }
+
+        // 2. Overpriced check (15%+ above block average)
+        const avgData = blockAverages[listing.block_id];
+        if (avgData && avgData.count >= 2) {
+            const avg = avgData.sum / avgData.count;
+            if (listing.demand_price > avg * 1.15) {
+                overpricedOrOversupplied.push({
+                    block: listing.block_id,
+                    price: listing.demand_price,
+                    type: 'overpriced',
+                    note: `Your listing price is 15%+ above block average of PKR ${Math.round(avg).toLocaleString('en-PK')}`
+                });
+            }
         }
     }
 
-    return overpriced;
+    return overpricedOrOversupplied;
 }

@@ -5,7 +5,7 @@ export async function runDailyReview() {
 
     const { data: listings, error } = await supabase
         .from('listings')
-        .select('id, owner_agent_id, block_id, size, demand_price')
+        .select('id, owner_agent_id, block_id, size, demand_price, updated_at')
         .eq('status', 'active');
 
     if (error) {
@@ -13,20 +13,38 @@ export async function runDailyReview() {
         return;
     }
 
-    // Group by agent
-    const byAgent = {};
-    for (const l of (listings || [])) {
-        if (!byAgent[l.owner_agent_id]) byAgent[l.owner_agent_id] = [];
-        byAgent[l.owner_agent_id].push(l);
+    if (!listings || listings.length === 0) {
+        console.log('[🧹 Janitor] No active listings found for daily review');
+        return;
     }
 
-    for (const [agentId, agentListings] of Object.entries(byAgent)) {
-        console.log(`[🧹 Janitor] Agent ${agentId} — ${agentListings.length} listing(s) to review`);
-        await supabase.from('notifications').insert([{
-            agent_id: agentId,
-            listing_id: null,
-            message: `📋 Daily Review: Tumhari ${agentListings.length} active listing(s) hain. App mein review karo.`,
-        }]);
+    const perListingNotifs = [];
+
+    for (const l of listings) {
+        const lastUpdatedMs = l.updated_at ? new Date(l.updated_at).getTime() : Date.now();
+        const days = Math.floor((Date.now() - lastUpdatedMs) / (24 * 60 * 60 * 1000));
+        const daysText = days === 0 ? 'aaj hi update kiya' : `${days} din pehle update kiya`;
+        
+        const priceText = l.demand_price ? `PKR ${l.demand_price.toLocaleString('en-PK')}` : 'Price not set';
+        
+        perListingNotifs.push({
+            agent_id: l.owner_agent_id,
+            listing_id: l.id,
+            message: `📋 Daily Review: ${l.size}gz plot in ${l.block_id} — ${priceText} (${daysText}). Kya details bilkul correct hain?`,
+            type: 'review'
+        });
+    }
+
+    if (perListingNotifs.length > 0) {
+        const { error: insertErr } = await supabase
+            .from('notifications')
+            .insert(perListingNotifs);
+
+        if (insertErr) {
+            console.error('[🧹 Janitor] Batch insert failed:', insertErr.message);
+        } else {
+            console.log(`[🧹 Janitor] Sent ${perListingNotifs.length} detailed daily review notification(s)`);
+        }
     }
 }
 
@@ -43,7 +61,7 @@ export async function autoArchiveStale() {
 
     if (error) {
         console.error('[🧹 Janitor] Archive error:', error.message);
-        return;
+        return [];
     }
 
     console.log(`[🧹 Janitor] Archived ${data?.length || 0} stale listing(s)`);
@@ -55,6 +73,29 @@ export async function autoArchiveStale() {
             listing_id: l.id,
             message: '⚠️ Tumhari ek listing archive ho gayi — 48 ghante se koi update nahi. App mein check karo.',
         }]);
+    }
+
+    return data || [];
+}
+
+// refreshBlockStats diagnostics: Since block_market_stats is a database view, we don't insert/update,
+// we just read and log status for health checks.
+export async function refreshBlockStats() {
+    console.log('[🧹 Janitor] Running diagnostics on block_market_stats view...');
+
+    try {
+        const { data, error } = await supabase
+            .from('block_market_stats')
+            .select('*');
+
+        if (error) throw error;
+
+        console.log(`[🧹 Janitor] block_market_stats view check: ${data?.length || 0} block(s) computed dynamically by DB`);
+        return data || [];
+
+    } catch (err) {
+        console.error('[🧹 Janitor] View check failed:', err.message);
+        throw err;
     }
 }
 

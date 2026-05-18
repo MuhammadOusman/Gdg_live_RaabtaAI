@@ -12,7 +12,16 @@ export async function parseMessage(rawMessage, ownerAgentId) {
     try {
         parsed = JSON.parse(responseText);
     } catch (err) {
-        throw new Error(`Gatekeeper: JSON parse failed — ${responseText}`);
+        console.warn('[🔍 Gatekeeper] JSON parse failed — retrying with explicit instruction...');
+        const retryText = await callGemini(
+            GATEKEEPER_PROMPT,
+            `${rawMessage}\n\n[SYSTEM: Return ONLY a valid JSON object. No explanation, no markdown, no backticks.]`
+        );
+        try {
+            parsed = JSON.parse(retryText);
+        } catch (retryErr) {
+            throw new Error(`Gatekeeper: JSON parse failed after retry — ${retryText.slice(0, 120)}`);
+        }
     }
 
     console.log(`[🔍 Gatekeeper] Intent: ${parsed.intent} | Block: ${parsed.block_id} | Confidence: ${parsed.confidence}`);
@@ -31,7 +40,13 @@ export async function parseMessage(rawMessage, ownerAgentId) {
     };
 }
 
+
 export async function saveListing(parsedData, ownerAgentId) {
+
+    if (!parsedData.demand_price && parsedData.price) {
+        parsedData.demand_price = parsedData.price
+    }
+
     const payload = {
         owner_agent_id: ownerAgentId,
         block_id: parsedData.block_id,

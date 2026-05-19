@@ -33,7 +33,7 @@ app.post('/api/confirm', async (req, res) => {
     try {
         const { parsed_data, sender_agent_id, session_id } = req.body
         const savedListing = await confirmAndSave(parsed_data, sender_agent_id, session_id)
-        res.json({ status: 'listing_saved', listing: savedListing })
+        res.json({ status: 'listing_saved', listing: savedListing, matches_count: savedListing.matches_count || 0 })
     } catch (err) {
         console.error('[Confirm] Error:', err.message)
         res.status(500).json({ error: err.message })

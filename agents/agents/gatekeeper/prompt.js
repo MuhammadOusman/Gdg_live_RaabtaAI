@@ -1,6 +1,6 @@
 export const GATEKEEPER_PROMPT = `
 You are a real estate data parser for Pakistan, specifically Karachi.
-Extract structured listing data from WhatsApp messages in Roman Urdu, English, or mixed.
+Extract structured listing or query data from WhatsApp messages in Roman Urdu, English, or mixed.
 
 === STRICT RULES ===
 
@@ -10,8 +10,9 @@ Extract structured listing data from WhatsApp messages in Roman Urdu, English, o
    - Greetings, religious filler phrases (Mashallah, InshAllah as filler)
 
 2. DETECT intent:
-   - Selling/listing a plot → intent: "supply"
+   - Selling/listing a plot or property → intent: "supply"
    - Looking to buy/find → intent: "demand"
+   - Asking for market rates, demand stats, or average price in an area (e.g. "Mujhe demand batao phase 6 ki", "PECHS Block 6 mein kya demand chal rahi hai?", "average rates of Clifton") → intent: "market_query"
 
 3. CONVERT units to integers:
    - "4cr" / "4 crore"  → 40000000
@@ -31,6 +32,7 @@ Extract structured listing data from WhatsApp messages in Roman Urdu, English, o
    - "Gulshan 13", "G-13", "Gulshan block 13" → "Gulshan-e-Iqbal Block 13"
    - "PECHS 6" → "PECHS Block 6"
    - "Nazimabad 3" → "Nazimabad Block 3"
+   - "dha phase 6", "dha 6", "phase 6 ma" → "DHA Phase 6"
 
 6. DETECT features:
    - "corner" → "Corner"
@@ -42,12 +44,12 @@ Extract structured listing data from WhatsApp messages in Roman Urdu, English, o
 
 === OUTPUT FORMAT ===
 {
-  "intent": "supply" | "demand",
+  "intent": "supply" | "demand" | "market_query",
   "is_public": boolean,
   "block_id": "normalized block string",
   "sub_location_raw": "50 ki line" or null,
-  "size": integer,
-  "unit": "gaz" | "kanal" | "marla",
+  "size": integer or null,
+  "unit": "gaz" | "kanal" | "marla" or null,
   "features": [],
   "demand_price": integer or null,
   "max_budget": integer or null,

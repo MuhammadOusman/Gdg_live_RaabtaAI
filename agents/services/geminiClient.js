@@ -1,5 +1,18 @@
 import { GoogleGenAI } from '@google/genai';
 import 'dotenv/config';
+import fs from 'fs';
+
+// Dynamically write GCP Service Account credentials on serverless environments if provided
+if (process.env.GCP_SERVICE_ACCOUNT_JSON) {
+    try {
+        const credsPath = '/tmp/gcp-creds.json';
+        fs.writeFileSync(credsPath, process.env.GCP_SERVICE_ACCOUNT_JSON);
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = credsPath;
+        console.log('[Gemini Client] Wrote GCP credentials from GCP_SERVICE_ACCOUNT_JSON');
+    } catch (err) {
+        console.error('[Gemini Client] Failed writing GCP credentials:', err.message);
+    }
+}
 
 let ai;
 if (process.env.GEMINI_API_KEY) {

@@ -84,6 +84,25 @@ class ApiService {
     throw Exception('Not authenticated. Please log in.');
   }
 
+  Future<Map<String, dynamic>> sendMessage(String text, {String source = 'app'}) async {
+    await ensureAuthenticated();
+    final url = Uri.parse('${AppConfig.backendUrl}/api/message');
+    final response = await http.post(
+      url,
+      headers: _headers(),
+      body: jsonEncode({
+        'raw_text': text,
+        'sender_agent_id': _currentAgent?['id'],
+        'source': source,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception('Failed to send message: ${response.statusCode}');
+  }
+
   Map<String, String> _headers() {
     final headers = {'Content-Type': 'application/json'};
     if (_token != null) {

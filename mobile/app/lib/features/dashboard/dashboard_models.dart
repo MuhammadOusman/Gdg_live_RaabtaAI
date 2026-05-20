@@ -18,6 +18,9 @@ class ListingRecord {
     required this.demandRatio,
     required this.workArea,
     required this.updatedAt,
+    this.listedBy = 'Unknown',
+    this.agencyName = 'Unknown Agency',
+    this.contactNumber = '',
   });
 
   final String id;
@@ -35,6 +38,9 @@ class ListingRecord {
   final double demandRatio;
   final String workArea;
   final DateTime updatedAt;
+  final String listedBy;
+  final String agencyName;
+  final String contactNumber;
 
   bool get hasCoordinates => latitude != null && longitude != null;
 
@@ -54,6 +60,9 @@ class ListingRecord {
     double? demandRatio,
     String? workArea,
     DateTime? updatedAt,
+    String? listedBy,
+    String? agencyName,
+    String? contactNumber,
   }) {
     return ListingRecord(
       id: id ?? this.id,
@@ -71,6 +80,9 @@ class ListingRecord {
       demandRatio: demandRatio ?? this.demandRatio,
       workArea: workArea ?? this.workArea,
       updatedAt: updatedAt ?? this.updatedAt,
+      listedBy: listedBy ?? this.listedBy,
+      agencyName: agencyName ?? this.agencyName,
+      contactNumber: contactNumber ?? this.contactNumber,
     );
   }
 
@@ -80,10 +92,14 @@ class ListingRecord {
       blockName: (json['block_name'] ?? json['blockName'] ?? 'Block') as String,
       priceLabel: (json['price_label'] ?? json['priceLabel'] ?? '—') as String,
       sizeLabel: (json['size_label'] ?? json['sizeLabel'] ?? '—') as String,
-        notesSnippet:
-          (json['notes_snippet'] ?? json['notesSnippet'] ?? 'No notes') as String,
-        sublocation: (json['sub_location'] ?? json['subLocation'] ?? '') as String,
-        notes: (json['notes_full'] ?? json['notesFull'] ?? json['notes'] ?? '') as String,
+      notesSnippet:
+          (json['notes_snippet'] ?? json['notesSnippet'] ?? 'No notes')
+              as String,
+      sublocation:
+          (json['sub_location'] ?? json['subLocation'] ?? '') as String,
+      notes:
+          (json['notes_full'] ?? json['notesFull'] ?? json['notes'] ?? '')
+              as String,
       latitude: _toDouble(json['latitude']),
       longitude: _toDouble(json['longitude']),
       signalTone: ListingToneX.fromValue(
@@ -95,8 +111,15 @@ class ListingRecord {
       status: ListingStatusX.fromValue((json['status'] ?? 'active') as String),
       demandRatio: _toDouble(json['demand_ratio']) ?? 1.0,
       workArea: (json['work_area'] ?? json['workArea'] ?? 'Karachi') as String,
-      updatedAt: DateTime.tryParse('${json['updated_at'] ?? json['updatedAt']}') ??
+      updatedAt:
+          DateTime.tryParse('${json['updated_at'] ?? json['updatedAt']}') ??
           DateTime.now(),
+      listedBy: (json['listed_by'] ?? json['listedBy'] ?? 'Unknown') as String,
+      agencyName:
+          (json['agency_name'] ?? json['agencyName'] ?? 'Unknown Agency')
+              as String,
+      contactNumber:
+          (json['contact_number'] ?? json['contactNumber'] ?? '') as String,
     );
   }
 }
@@ -158,14 +181,26 @@ class MatchLead {
   factory MatchLead.fromJson(Map<String, dynamic> json) {
     return MatchLead(
       id: '${json['id']}',
-      sellerName: (json['seller_name'] ?? json['sellerName'] ?? 'Seller') as String,
+      sellerName:
+          (json['seller_name'] ?? json['sellerName'] ?? 'Seller') as String,
       buyerName: (json['buyer_name'] ?? json['buyerName'] ?? 'Buyer') as String,
       blockName: (json['block_name'] ?? json['blockName'] ?? 'Block') as String,
-      reasoningTrace: (json['reasoning_trace'] ?? json['reasoningTrace'] ?? 'Reasoning: Match found using 15% budget flex. Property is West-Open as requested.') as String,
-      summary: (json['summary'] ?? json['summary_text'] ?? 'High-fit lead, best used as a premium call.') as String,
-      phoneNumber: (json['phone_number'] ?? json['phoneNumber'] ?? '+92 300 1234567') as String,
+      reasoningTrace:
+          (json['reasoning_trace'] ??
+                  json['reasoningTrace'] ??
+                  'Reasoning: Match found using 15% budget flex. Property is West-Open as requested.')
+              as String,
+      summary:
+          (json['summary'] ??
+                  json['summary_text'] ??
+                  'High-fit lead, best used as a premium call.')
+              as String,
+      phoneNumber:
+          (json['phone_number'] ?? json['phoneNumber'] ?? '+92 300 1234567')
+              as String,
       agency: (json['agency'] ?? 'Raabta Private Desk') as String,
-      createdAt: DateTime.tryParse('${json['created_at'] ?? json['createdAt']}') ??
+      createdAt:
+          DateTime.tryParse('${json['created_at'] ?? json['createdAt']}') ??
           DateTime.now(),
     );
   }
@@ -256,7 +291,8 @@ class DashboardFixtures {
       sizeLabel: '120 Sq Yd',
       notesSnippet: 'Owner ready at 4.1, needs a fast close.',
       sublocation: 'Block N East',
-      notes: 'Owner ready at 4.1, needs a fast close. Contact via mobile; prefers cash deals.',
+      notes:
+          'Owner ready at 4.1, needs a fast close. Contact via mobile; prefers cash deals.',
       latitude: 24.9366,
       longitude: 67.0493,
       signalTone: ListingTone.hot,
@@ -273,7 +309,8 @@ class DashboardFixtures {
       sizeLabel: '80 Sq Yd',
       notesSnippet: 'Fresh capture, green-lighted for public.',
       sublocation: '13D North',
-      notes: 'Fresh capture, green-lighted for public. Owner open to quick visits on weekends.',
+      notes:
+          'Fresh capture, green-lighted for public. Owner open to quick visits on weekends.',
       latitude: 24.9225,
       longitude: 67.1247,
       signalTone: ListingTone.newListing,
@@ -290,7 +327,8 @@ class DashboardFixtures {
       sizeLabel: '240 Sq Yd',
       notesSnippet: 'Premium corner plot with west-open edge.',
       sublocation: 'K Sector Corner',
-      notes: 'Premium corner plot with west-open edge. Documents clear; preferred serious buyers only.',
+      notes:
+          'Premium corner plot with west-open edge. Documents clear; preferred serious buyers only.',
       latitude: 24.945,
       longitude: 67.072,
       signalTone: ListingTone.standard,
@@ -307,7 +345,8 @@ class DashboardFixtures {
       sizeLabel: '75 Sq Yd',
       notesSnippet: 'Buyer asked for possession within 30 days.',
       sublocation: 'Block 9 South',
-      notes: 'Buyer asked for possession within 30 days. Tenant occupied, needs 2-week notice.',
+      notes:
+          'Buyer asked for possession within 30 days. Tenant occupied, needs 2-week notice.',
       latitude: 24.895,
       longitude: 67.13,
       signalTone: ListingTone.hot,
@@ -324,7 +363,8 @@ class DashboardFixtures {
       sizeLabel: '160 Sq Yd',
       notesSnippet: 'Negotiable if the buyer skips financing.',
       sublocation: 'Block M West',
-      notes: 'Negotiable if the buyer skips financing. Seller prefers deal closure within 45 days.',
+      notes:
+          'Negotiable if the buyer skips financing. Seller prefers deal closure within 45 days.',
       latitude: 24.929,
       longitude: 67.058,
       signalTone: ListingTone.newListing,
@@ -341,7 +381,8 @@ class DashboardFixtures {
       sizeLabel: '100 Sq Yd',
       notesSnippet: 'Archived lead, keep in CRM only.',
       sublocation: 'Block L Near Park',
-      notes: 'Archived lead, keep in CRM only. Seller decided to postpone listing.',
+      notes:
+          'Archived lead, keep in CRM only. Seller decided to postpone listing.',
       latitude: 24.913,
       longitude: 67.086,
       signalTone: ListingTone.standard,
@@ -428,16 +469,66 @@ class DashboardFixtures {
   ];
 
   static final List<LeaderboardEntry> leaderboard = [
-    LeaderboardEntry(rank: 1, name: 'Hassan Ali', agency: 'Prime Link', volumeLabel: '128 deals'),
-    LeaderboardEntry(rank: 2, name: 'Sana Khan', agency: 'Urban Grid', volumeLabel: '115 deals'),
-    LeaderboardEntry(rank: 3, name: 'Adeel Raza', agency: 'Karachi Keys', volumeLabel: '103 deals'),
-    LeaderboardEntry(rank: 4, name: 'Mariam Shah', agency: 'Harbor Estate', volumeLabel: '97 deals'),
-    LeaderboardEntry(rank: 5, name: 'Fahad Noor', agency: 'Block Pulse', volumeLabel: '92 deals'),
-    LeaderboardEntry(rank: 6, name: 'Zain Abbas', agency: 'Axis Realty', volumeLabel: '87 deals'),
-    LeaderboardEntry(rank: 7, name: 'Aisha Karim', agency: 'Neon Properties', volumeLabel: '81 deals'),
-    LeaderboardEntry(rank: 8, name: 'Saad Javed', agency: 'DealCraft', volumeLabel: '77 deals'),
-    LeaderboardEntry(rank: 9, name: 'Noor Fatima', agency: 'Harbor Lane', volumeLabel: '69 deals'),
-    LeaderboardEntry(rank: 10, name: 'Hamza Tariq', agency: 'Metro Pulse', volumeLabel: '64 deals'),
+    LeaderboardEntry(
+      rank: 1,
+      name: 'Hassan Ali',
+      agency: 'Prime Link',
+      volumeLabel: '128 deals',
+    ),
+    LeaderboardEntry(
+      rank: 2,
+      name: 'Sana Khan',
+      agency: 'Urban Grid',
+      volumeLabel: '115 deals',
+    ),
+    LeaderboardEntry(
+      rank: 3,
+      name: 'Adeel Raza',
+      agency: 'Karachi Keys',
+      volumeLabel: '103 deals',
+    ),
+    LeaderboardEntry(
+      rank: 4,
+      name: 'Mariam Shah',
+      agency: 'Harbor Estate',
+      volumeLabel: '97 deals',
+    ),
+    LeaderboardEntry(
+      rank: 5,
+      name: 'Fahad Noor',
+      agency: 'Block Pulse',
+      volumeLabel: '92 deals',
+    ),
+    LeaderboardEntry(
+      rank: 6,
+      name: 'Zain Abbas',
+      agency: 'Axis Realty',
+      volumeLabel: '87 deals',
+    ),
+    LeaderboardEntry(
+      rank: 7,
+      name: 'Aisha Karim',
+      agency: 'Neon Properties',
+      volumeLabel: '81 deals',
+    ),
+    LeaderboardEntry(
+      rank: 8,
+      name: 'Saad Javed',
+      agency: 'DealCraft',
+      volumeLabel: '77 deals',
+    ),
+    LeaderboardEntry(
+      rank: 9,
+      name: 'Noor Fatima',
+      agency: 'Harbor Lane',
+      volumeLabel: '69 deals',
+    ),
+    LeaderboardEntry(
+      rank: 10,
+      name: 'Hamza Tariq',
+      agency: 'Metro Pulse',
+      volumeLabel: '64 deals',
+    ),
   ];
 
   static final List<MarketPremium> premiums = [

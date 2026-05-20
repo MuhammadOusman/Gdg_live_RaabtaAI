@@ -204,21 +204,17 @@ class DashboardController extends ChangeNotifier {
 
   void _bindStreams() {
     _listingsSub = _repository.watchListings().listen((data) {
-      if (data.isNotEmpty) {
-        _remoteListings
-          ..clear()
-          ..addAll(data);
-        notifyListeners();
-      }
+      _remoteListings
+        ..clear()
+        ..addAll(data);
+      notifyListeners();
     });
 
     _statsSub = _repository.watchBlockStats().listen((data) {
-      if (data.isNotEmpty) {
-        _blockStats
-          ..clear()
-          ..addAll(data);
-        notifyListeners();
-      }
+      _blockStats
+        ..clear()
+        ..addAll(data);
+      notifyListeners();
     });
 
     _matchesSub = _repository.watchMatchLeads().listen((data) {

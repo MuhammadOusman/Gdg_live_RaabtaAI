@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../match/match_chat_screen.dart';
@@ -20,11 +21,7 @@ class RaabtaDashboardShell extends StatelessWidget {
     return Scaffold(
       extendBody: true,
       body: Stack(
-        children: const [
-          _TabHost(),
-          _FloatingToast(),
-          _BottomNavShell(),
-        ],
+        children: const [_TabHost(), _FloatingToast(), _BottomNavShell()],
       ),
     );
   }
@@ -76,14 +73,21 @@ class _FloatingToast extends StatelessWidget {
                 child: Center(
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 20),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF14171D).withValues(alpha: 0.94),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
+                      ),
                       boxShadow: [
                         BoxShadow(
-                          color: RaabtaTheme.emeraldGreen.withValues(alpha: 0.16),
+                          color: RaabtaTheme.emeraldGreen.withValues(
+                            alpha: 0.16,
+                          ),
                           blurRadius: 24,
                           offset: const Offset(0, 10),
                         ),
@@ -93,8 +97,8 @@ class _FloatingToast extends StatelessWidget {
                       message ?? '',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -118,41 +122,67 @@ class _BottomNavShell extends StatelessWidget {
         top: false,
         minimum: const EdgeInsets.fromLTRB(18, 0, 18, 8),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(24),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
             child: Container(
               decoration: BoxDecoration(
-                color: RaabtaTheme.charcoal.withValues(alpha: 0.78),
+                color: Colors.white.withValues(alpha: 0.08),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(24),
               ),
               child: Consumer<DashboardController>(
                 builder: (context, controller, _) {
-                  return NavigationBar(
-                    height: 60,
-                    labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-                    backgroundColor: Colors.transparent,
-                    selectedIndex: controller.tabIndex,
-                    onDestinationSelected: controller.setTabIndex,
-                    destinations: const [
-                      NavigationDestination(
-                        icon: Icon(Icons.waves_rounded),
-                        label: 'Pulse',
-                      ),
-                      NavigationDestination(
-                        icon: Icon(Icons.vpn_key_rounded),
-                        label: 'Vault',
-                      ),
-                      NavigationDestination(
-                        icon: Icon(Icons.auto_graph_rounded),
-                        label: 'Match',
-                      ),
-                      NavigationDestination(
-                        icon: Icon(Icons.insights_rounded),
-                        label: 'Intel',
-                      ),
-                    ],
+                  final items = <({IconData icon, String label})>[
+                    (icon: Icons.waves_rounded, label: 'Pulse'),
+                    (icon: Icons.vpn_key_rounded, label: 'Vault'),
+                    (icon: Icons.auto_graph_rounded, label: 'Match'),
+                    (icon: Icons.insights_rounded, label: 'Intel'),
+                  ];
+
+                  return SizedBox(
+                    height: 52,
+                    child: Row(
+                      children: List.generate(items.length, (index) {
+                        final item = items[index];
+                        final selected = controller.tabIndex == index;
+                        return Expanded(
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            onTap: () => controller.setTabIndex(index),
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    item.icon,
+                                    size: 20,
+                                    color: selected
+                                        ? RaabtaTheme.electricBlue
+                                        : Colors.white70,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    item.label,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: selected
+                                              ? Colors.white
+                                              : Colors.white70,
+                                          fontWeight: selected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
                   );
                 },
               ),
@@ -172,8 +202,8 @@ class PulseMapScreen extends StatefulWidget {
 }
 
 class _PulseMapScreenState extends State<PulseMapScreen> {
-  late final ScrollController _carouselController = ScrollController();
   GoogleMapController? _googleMapController;
+  ListingRecord? _selectedListing;
   bool _hasInitialZoom = false;
 
   static const CameraPosition _kKarachi = CameraPosition(
@@ -182,12 +212,16 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
   );
 
   void _zoomToWorkAreas(DashboardController controller) {
-    if (_googleMapController == null || controller.selectedWorkAreas.isEmpty) return;
+    if (_googleMapController == null || controller.selectedWorkAreas.isEmpty) {
+      return;
+    }
 
-    LatLngBounds? bounds;
+    late final LatLngBounds bounds;
 
     // Check if we have listings in selected work areas to zoom to
-    final filteredListings = controller.listings.where((l) => l.hasCoordinates).toList();
+    final filteredListings = controller.listings
+        .where((l) => l.hasCoordinates)
+        .toList();
 
     if (filteredListings.isNotEmpty) {
       double minLat = filteredListings.first.latitude!;
@@ -210,11 +244,11 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
       // Fallback to block centroids if no listings found
       final areas = controller.selectedWorkAreas;
       final coords = areas.map((a) {
-         if (a.contains('Nazimabad')) return const LatLng(24.93, 67.04);
-         if (a.contains('PECHS')) return const LatLng(24.87, 67.05);
-         if (a.contains('Gulshan')) return const LatLng(24.91, 67.10);
-         if (a.contains('Scheme 33')) return const LatLng(24.95, 67.12);
-         return const LatLng(24.91, 67.08); // Default Karachi
+        if (a.contains('Nazimabad')) return const LatLng(24.93, 67.04);
+        if (a.contains('PECHS')) return const LatLng(24.87, 67.05);
+        if (a.contains('Gulshan')) return const LatLng(24.91, 67.10);
+        if (a.contains('Scheme 33')) return const LatLng(24.95, 67.12);
+        return const LatLng(24.91, 67.08); // Default Karachi
       }).toList();
 
       double minLat = coords.first.latitude;
@@ -235,14 +269,12 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
       );
     }
 
-    if (bounds != null) {
-      _googleMapController!.animateCamera(
-        CameraUpdate.newLatLngBounds(bounds, 50),
-      );
-      setState(() {
-        _hasInitialZoom = true;
-      });
-    }
+    _googleMapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(bounds, 50),
+    );
+    setState(() {
+      _hasInitialZoom = true;
+    });
   }
 
   static const String _darkMapStyleJson = r'''
@@ -363,7 +395,6 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
 
   @override
   void dispose() {
-    _carouselController.dispose();
     _googleMapController?.dispose();
     super.dispose();
   }
@@ -376,57 +407,55 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
         final Set<Marker> myMarkers = controller.unfilteredListings
             .where((listing) => listing.hasCoordinates)
             .map((listing) {
-          final matchesFilter = controller.selectedWorkAreas.isEmpty ||
-              controller.selectedWorkAreas.contains(listing.workArea);
+              final matchesFilter =
+                  controller.selectedWorkAreas.isEmpty ||
+                  controller.selectedWorkAreas.contains(listing.workArea);
 
-          // Style markers of selected work areas with colorful hues, and others with a grey/slate hue
-          double markerHue = 200.0; // Slate-grey for greyed out areas
-          if (matchesFilter) {
-            if (listing.demandRatio >= 2.0) {
-              markerHue = BitmapDescriptor.hueRed;
-            } else if (listing.blockName.contains('H') || listing.blockName.contains('15')) {
-              markerHue = BitmapDescriptor.hueGreen;
-            } else if (listing.blockName.contains('N')) {
-              markerHue = BitmapDescriptor.hueYellow;
-            } else {
-              markerHue = BitmapDescriptor.hueAzure;
-            }
-          }
-
-          return Marker(
-            markerId: MarkerId(listing.id),
-            position: LatLng(listing.latitude!, listing.longitude!),
-            icon: BitmapDescriptor.defaultMarkerWithHue(markerHue),
-            alpha: matchesFilter ? 1.0 : 0.45,
-            infoWindow: InfoWindow(
-              title: '${listing.blockName} • ${listing.priceLabel}',
-              snippet: listing.notesSnippet,
-            ),
-            onTap: () {
-              final wasFiltered = controller.selectedWorkAreas.isNotEmpty;
-              if (wasFiltered && !matchesFilter) {
-                controller.setWorkAreas([listing.workArea]);
-                controller.showToast('Focused on ${listing.workArea}');
-              } else {
-                controller.showToast('${listing.blockName} • ${listing.priceLabel} Selected');
+              // Style markers of selected work areas with colorful hues, and others with a grey/slate hue
+              double markerHue = 200.0; // Slate-grey for greyed out areas
+              if (matchesFilter) {
+                if (listing.demandRatio >= 2.0) {
+                  markerHue = BitmapDescriptor.hueRed;
+                } else if (listing.blockName.contains('H') ||
+                    listing.blockName.contains('15')) {
+                  markerHue = BitmapDescriptor.hueGreen;
+                } else if (listing.blockName.contains('N')) {
+                  markerHue = BitmapDescriptor.hueYellow;
+                } else {
+                  markerHue = BitmapDescriptor.hueAzure;
+                }
               }
 
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                final index = controller.listings.indexWhere((l) => l.id == listing.id);
-                if (index != -1 && _carouselController.hasClients) {
-                  _carouselController.animateTo(
-                    index * 232.0,
-                    duration: const Duration(milliseconds: 350),
-                    curve: Curves.easeOutCubic,
-                  );
-                }
-              });
-            },
-          );
-        }).toSet();
+              return Marker(
+                markerId: MarkerId(listing.id),
+                position: LatLng(listing.latitude!, listing.longitude!),
+                icon: BitmapDescriptor.defaultMarkerWithHue(markerHue),
+                alpha: matchesFilter ? 1.0 : 0.45,
+                infoWindow: InfoWindow(
+                  title: '${listing.blockName} • ${listing.priceLabel}',
+                  snippet: listing.notesSnippet,
+                ),
+                onTap: () {
+                  setState(() {
+                    _selectedListing = listing;
+                  });
+                  final wasFiltered = controller.selectedWorkAreas.isNotEmpty;
+                  if (wasFiltered && !matchesFilter) {
+                    controller.setWorkAreas([listing.workArea]);
+                    controller.showToast('Focused on ${listing.workArea}');
+                  } else {
+                    controller.showToast(
+                      '${listing.blockName} • ${listing.priceLabel} Selected',
+                    );
+                  }
+                },
+              );
+            })
+            .toSet();
 
         // Build premium demand heatmap circles based on block statistics
-        final Set<Circle> demandHeatmapCircles = controller.unfilteredBlockStats.map((stat) {
+        final Set<Circle>
+        demandHeatmapCircles = controller.unfilteredBlockStats.map((stat) {
           String inferredArea = 'North Nazimabad';
           final name = stat.blockName.toLowerCase();
           if (name.contains('13d') || name.contains('gulshan')) {
@@ -441,7 +470,8 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
             inferredArea = 'Nazimabad';
           }
 
-          final matchesFilter = controller.selectedWorkAreas.isEmpty ||
+          final matchesFilter =
+              controller.selectedWorkAreas.isEmpty ||
               controller.selectedWorkAreas.contains(inferredArea);
 
           // Beautiful geographic clustering centers for key blocks in Karachi
@@ -461,11 +491,11 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
             lng = 67.12;
           }
 
-          final Color circleColor = matchesFilter 
+          final Color circleColor = matchesFilter
               ? RaabtaTheme.emeraldGreen.withValues(alpha: 0.16)
               : Colors.grey.withValues(alpha: 0.05);
 
-          final Color strokeColor = matchesFilter 
+          final Color strokeColor = matchesFilter
               ? RaabtaTheme.emeraldGreen.withValues(alpha: 0.3)
               : Colors.grey.withValues(alpha: 0.1);
 
@@ -513,9 +543,8 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
                       Expanded(
                         child: Text(
                           'Search blocks, listings, sellers',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.white54,
-                              ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: Colors.white54),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -532,35 +561,34 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
                   ),
                 ),
               ),
-            ),
-            // Listing cards carousel at bottom
-            if (controller.listings.isNotEmpty)
+            ), // Selected listing details
+            if (_selectedListing != null)
               Positioned(
-                left: 0,
-                right: 0,
-                bottom: 100,
-                child: SizedBox(
-                  height: 140,
-                  child: ListView.separated(
-                    controller: _carouselController,
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: controller.listings.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 12),
-                    itemBuilder: (context, index) {
-                      final listing = controller.listings[index];
-                      return SizedBox(
-                        width: 220,
-                        child: ListingCard(listing: listing, compact: true),
-                      );
-                    },
-                  ),
+                left: 16,
+                right: 16,
+                bottom: 92,
+                child: _MapDetailsPanel(
+                  listing: _selectedListing!,
+                  onCopy: () async {
+                    final number = _selectedListing!.contactNumber.trim();
+                    if (number.isEmpty) {
+                      controller.showToast('No contact number available');
+                      return;
+                    }
+                    await Clipboard.setData(ClipboardData(text: number));
+                    controller.showToast('Number copied');
+                  },
+                  onClose: () {
+                    setState(() {
+                      _selectedListing = null;
+                    });
+                  },
                 ),
               ),
             // Legend
             Positioned(
               left: 16,
-              bottom: 250,
+              bottom: _selectedListing != null ? 300 : 140,
               child: Wrap(
                 direction: Axis.vertical,
                 spacing: 6,
@@ -568,7 +596,10 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
                   _LegendPill(color: RaabtaTheme.electricBlue, label: 'Plot'),
                   _LegendPill(color: RaabtaTheme.emeraldGreen, label: 'New'),
                   _LegendPill(color: RaabtaTheme.softGold, label: 'Hot'),
-                  _LegendPill(color: RaabtaTheme.signalRed, label: 'Demand > 2.0'),
+                  _LegendPill(
+                    color: RaabtaTheme.signalRed,
+                    label: 'Demand > 2.0',
+                  ),
                 ],
               ),
             ),
@@ -578,7 +609,10 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
     );
   }
 
-  Future<void> _openWorkAreaSheet(BuildContext context, DashboardController controller) async {
+  Future<void> _openWorkAreaSheet(
+    BuildContext context,
+    DashboardController controller,
+  ) async {
     final selected = controller.selectedWorkAreas.toSet();
     await showModalBottomSheet<void>(
       context: context,
@@ -598,34 +632,39 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Work Areas', style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    'Work Areas',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     'Multi-select Karachi blocks to personalize the map and CRM views.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white70,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
                   ),
                   const SizedBox(height: 16),
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
-                    children: controller.availableWorkAreas.map((area) {
-                      final isSelected = selected.contains(area);
-                      return FilterChip(
-                        label: Text(area),
-                        selected: isSelected,
-                        onSelected: (value) {
-                          setModalState(() {
-                            if (value) {
-                              selected.add(area);
-                            } else {
-                              selected.remove(area);
-                            }
-                          });
-                        },
-                      );
-                    }).toList(growable: false),
+                    children: controller.availableWorkAreas
+                        .map((area) {
+                          final isSelected = selected.contains(area);
+                          return FilterChip(
+                            label: Text(area),
+                            selected: isSelected,
+                            onSelected: (value) {
+                              setModalState(() {
+                                if (value) {
+                                  selected.add(area);
+                                } else {
+                                  selected.remove(area);
+                                }
+                              });
+                            },
+                          );
+                        })
+                        .toList(growable: false),
                   ),
                   const SizedBox(height: 18),
                   Row(
@@ -660,6 +699,94 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
     );
   }
 }
+
+class _MapDetailsPanel extends StatelessWidget {
+  const _MapDetailsPanel({
+    required this.listing,
+    required this.onCopy,
+    required this.onClose,
+  });
+
+  final ListingRecord listing;
+  final VoidCallback onCopy;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${listing.blockName} | ${listing.priceLabel}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: onClose,
+                icon: const Icon(Icons.close, color: Color(0xFF374151)),
+              ),
+            ],
+          ),
+          Text(
+            '${listing.sizeLabel}${listing.sublocation.isEmpty ? '' : ' | ${listing.sublocation}'}',
+            style: const TextStyle(color: Color(0xFF374151)),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Listed by: ${listing.listedBy}',
+            style: const TextStyle(color: Color(0xFF111827)),
+          ),
+          Text(
+            'Agency: ${listing.agencyName}',
+            style: const TextStyle(color: Color(0xFF111827)),
+          ),
+          Text(
+            'Number: ${listing.contactNumber.isEmpty ? 'N/A' : listing.contactNumber}',
+            style: const TextStyle(color: Color(0xFF111827)),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            listing.notes.isEmpty ? 'No notes' : listing.notes,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Color(0xFF4B5563)),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onCopy,
+              icon: const Icon(Icons.copy_rounded),
+              label: const Text('Copy Number'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class VaultScreen extends StatelessWidget {
   const VaultScreen({super.key});
 
@@ -675,19 +802,26 @@ class VaultScreen extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('The Vault', style: Theme.of(context).textTheme.headlineMedium),
+                Text(
+                  'The Vault',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
                 const SizedBox(height: 6),
                 Text(
                   showReqs
                       ? 'Swipe right to delete a request.'
                       : 'Swipe right to archive as sold. Swipe left to flip public/private.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white70,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
                 ),
                 const SizedBox(height: 16),
                 _VaultTabs(
-                  selected: showReqs ? 2 : (controller.vaultFilter == ListingVisibility.private ? 0 : 1),
+                  selected: showReqs
+                      ? 2
+                      : (controller.vaultFilter == ListingVisibility.private
+                            ? 0
+                            : 1),
                   onTab: (index) {
                     if (index == 0) {
                       controller.setVaultFilter(ListingVisibility.private);
@@ -701,7 +835,9 @@ class VaultScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Expanded(
-                  child: showReqs ? _buildRequestsList(controller) : _buildListingsList(controller),
+                  child: showReqs
+                      ? _buildRequestsList(controller)
+                      : _buildListingsList(controller),
                 ),
               ],
             );
@@ -713,13 +849,18 @@ class VaultScreen extends StatelessWidget {
 
   Widget _buildListingsList(DashboardController controller) {
     final items = controller.vaultFilter == ListingVisibility.private
-        ? controller.vaultListings.where((l) => l.visibility == ListingVisibility.private).toList(growable: false)
-        : controller.vaultListings.where((l) => l.visibility == ListingVisibility.public).toList(growable: false);
+        ? controller.vaultListings
+              .where((l) => l.visibility == ListingVisibility.private)
+              .toList(growable: false)
+        : controller.vaultListings
+              .where((l) => l.visibility == ListingVisibility.public)
+              .toList(growable: false);
 
     if (items.isEmpty) {
       return const _EmptyState(
         title: 'Nothing here yet',
-        subtitle: 'Try widening your work-area filter or import a private lead.',
+        subtitle:
+            'Try widening your work-area filter or import a private lead.',
       );
     }
 
@@ -739,7 +880,9 @@ class VaultScreen extends StatelessWidget {
           secondaryBackground: _DismissBackground(
             color: RaabtaTheme.electricBlue,
             icon: Icons.visibility_rounded,
-            label: listing.visibility == ListingVisibility.private ? 'PUBLIC' : 'PRIVATE',
+            label: listing.visibility == ListingVisibility.private
+                ? 'PUBLIC'
+                : 'PRIVATE',
             alignment: Alignment.centerRight,
           ),
           onDismissed: (direction) {
@@ -797,8 +940,12 @@ class _RequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final blocks = request.targetBlocks.join(', ');
-    final features = request.targetFeatures.isNotEmpty ? request.targetFeatures.join(', ') : null;
-    final budget = request.maxBudget != null ? _formatBigInt(request.maxBudget!) : null;
+    final features = request.targetFeatures.isNotEmpty
+        ? request.targetFeatures.join(', ')
+        : null;
+    final budget = request.maxBudget != null
+        ? _formatBigInt(request.maxBudget!)
+        : null;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -818,7 +965,11 @@ class _RequestCard extends StatelessWidget {
                   color: RaabtaTheme.electricBlue.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(Icons.search_rounded, size: 18, color: RaabtaTheme.electricBlue),
+                child: Icon(
+                  Icons.search_rounded,
+                  size: 18,
+                  color: RaabtaTheme.electricBlue,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -827,8 +978,8 @@ class _RequestCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -840,8 +991,7 @@ class _RequestCard extends StatelessWidget {
             children: [
               if (request.targetSize != null)
                 _InfoChip(label: '${request.targetSize} ${request.unit}'),
-              if (budget != null)
-                _InfoChip(label: budget),
+              if (budget != null) _InfoChip(label: budget),
               _InfoChip(label: request.status),
             ],
           ),
@@ -852,9 +1002,9 @@ class _RequestCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white54,
-                    fontStyle: FontStyle.italic,
-                  ),
+                color: Colors.white54,
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ],
         ],
@@ -863,7 +1013,9 @@ class _RequestCard extends StatelessWidget {
   }
 
   String _formatBigInt(int amount) {
-    if (amount >= 10000000) return '${(amount / 10000000).toStringAsFixed(1)} Cr';
+    if (amount >= 10000000) {
+      return '${(amount / 10000000).toStringAsFixed(1)} Cr';
+    }
     if (amount >= 100000) return '${(amount / 100000).toStringAsFixed(1)} Lakh';
     return '$amount';
   }
@@ -885,19 +1037,16 @@ class _InfoChip extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.white70,
-              fontWeight: FontWeight.w500,
-            ),
+          color: Colors.white70,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
 }
 
 class _VaultTabs extends StatelessWidget {
-  const _VaultTabs({
-    required this.selected,
-    required this.onTab,
-  });
+  const _VaultTabs({required this.selected, required this.onTab});
 
   final int selected;
   final ValueChanged<int> onTab;
@@ -958,22 +1107,31 @@ class MatchFeedScreen extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Match Center', style: Theme.of(context).textTheme.headlineMedium),
+                Text(
+                  'Match Center',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
                 const SizedBox(height: 6),
                 Text(
                   'AI-powered connections between sellers and buyers.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
                 ),
                 const SizedBox(height: 16),
                 Expanded(
                   child: ListView.separated(
-                    itemCount: controller.matchLeads.isEmpty ? 1 : controller.matchLeads.length,
-                    separatorBuilder: (context, _) => const SizedBox(height: 14),
+                    itemCount: controller.matchLeads.isEmpty
+                        ? 1
+                        : controller.matchLeads.length,
+                    separatorBuilder: (context, _) =>
+                        const SizedBox(height: 14),
                     itemBuilder: (context, index) {
                       if (controller.matchLeads.isEmpty) {
                         return const _EmptyState(
                           title: 'No matches yet',
-                          subtitle: 'Realtime notifications will appear here as the engine finds fit.',
+                          subtitle:
+                              'Realtime notifications will appear here as the engine finds fit.',
                         );
                       }
 
@@ -1016,9 +1174,9 @@ class _MatchCardState extends State<_MatchCard> {
         children: [
           Text(
             'AI Connection: ${widget.lead.sellerName} (Seller) ↔ You (Buyer)',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
           Container(
@@ -1035,16 +1193,16 @@ class _MatchCardState extends State<_MatchCard> {
                 Text(
                   widget.lead.reasoningTrace,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        height: 1.35,
-                        color: Colors.white.withValues(alpha: 0.92),
-                      ),
+                    height: 1.35,
+                    color: Colors.white.withValues(alpha: 0.92),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   widget.lead.summary,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.white60,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.white60),
                 ),
               ],
             ),
@@ -1055,9 +1213,9 @@ class _MatchCardState extends State<_MatchCard> {
               Expanded(
                 child: Text(
                   widget.lead.agency,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white70,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
                 ),
               ),
               FilledButton.icon(
@@ -1088,17 +1246,22 @@ class InsightsScreen extends StatelessWidget {
         child: Consumer<DashboardController>(
           builder: (context, controller, _) {
             final selectedAreaCount = controller.selectedWorkAreas.length;
-            final demandValue = controller.blockStats.isEmpty ? 0.0 : controller.blockStats.first.demandRatio;
+            final demandValue = controller.blockStats.isEmpty
+                ? 0.0
+                : controller.blockStats.first.demandRatio;
 
             return ListView(
               children: [
-                Text('Market Insights', style: Theme.of(context).textTheme.headlineMedium),
+                Text(
+                  'Market Insights',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
                 const SizedBox(height: 6),
                 Text(
                   'Radar-grade signals for demand, pricing, and agent performance.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white70,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
                 ),
                 const SizedBox(height: 18),
                 Row(
@@ -1107,7 +1270,9 @@ class InsightsScreen extends StatelessWidget {
                       child: _PanelCard(
                         title: 'N. Nazimabad',
                         subtitle: 'Demand',
-                        child: _RadialGauge(value: (demandValue * 35).clamp(10, 100)),
+                        child: _RadialGauge(
+                          value: (demandValue * 35).clamp(10, 100),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -1115,7 +1280,11 @@ class InsightsScreen extends StatelessWidget {
                       child: _PanelCard(
                         title: 'Selected Areas',
                         subtitle: 'Coverage',
-                        child: _RadialGauge(value: (selectedAreaCount * 20).clamp(20, 100).toDouble()),
+                        child: _RadialGauge(
+                          value: (selectedAreaCount * 20)
+                              .clamp(20, 100)
+                              .toDouble(),
+                        ),
                       ),
                     ),
                   ],
@@ -1139,7 +1308,8 @@ class InsightsScreen extends StatelessWidget {
                 const SizedBox(height: 18),
                 _SectionCard(
                   title: 'Feature Premiums',
-                  subtitle: 'Market lift indicators for common buyer preferences.',
+                  subtitle:
+                      'Market lift indicators for common buyer preferences.',
                   child: Wrap(
                     spacing: 10,
                     runSpacing: 10,
@@ -1156,14 +1326,17 @@ class InsightsScreen extends StatelessWidget {
                 const SizedBox(height: 18),
                 _SectionCard(
                   title: 'Geofencing / Profile Filters',
-                  subtitle: 'Multi-select Karachi blocks to personalize the live map.',
+                  subtitle:
+                      'Multi-select Karachi blocks to personalize the live map.',
                   child: Wrap(
                     spacing: 10,
                     runSpacing: 10,
                     children: controller.availableWorkAreas
                         .map(
                           (area) => FilterChip(
-                            selected: controller.selectedWorkAreas.contains(area),
+                            selected: controller.selectedWorkAreas.contains(
+                              area,
+                            ),
                             label: Text(area),
                             onSelected: (_) => controller.toggleWorkArea(area),
                           ),
@@ -1181,7 +1354,11 @@ class InsightsScreen extends StatelessWidget {
 }
 
 class _PanelCard extends StatelessWidget {
-  const _PanelCard({required this.title, required this.subtitle, required this.child});
+  const _PanelCard({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
 
   final String title;
   final String subtitle;
@@ -1198,7 +1375,11 @@ class _PanelCard extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.subtitle, required this.child});
+  const _SectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
 
   final String title;
   final String subtitle;
@@ -1218,12 +1399,16 @@ class _SectionCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white60),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.white60),
           ),
           const SizedBox(height: 16),
           child,
@@ -1245,9 +1430,9 @@ class _RadialGauge extends StatelessWidget {
       child: Center(
         child: Text(
           '${value.toStringAsFixed(0)}%',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
         ),
       ),
     );
@@ -1286,7 +1471,10 @@ class _LeaderboardRow extends StatelessWidget {
           CircleAvatar(
             radius: 15,
             backgroundColor: RaabtaTheme.electricBlue.withValues(alpha: 0.2),
-            child: Text('${entry.rank}', style: const TextStyle(fontWeight: FontWeight.w700)),
+            child: Text(
+              '${entry.rank}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1295,28 +1483,32 @@ class _LeaderboardRow extends StatelessWidget {
               children: [
                 Text(
                   entry.name,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   entry.agency,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.white60,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.white60),
                 ),
               ],
             ),
           ),
           Text(
             entry.volumeLabel,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: RaabtaTheme.softGold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: RaabtaTheme.softGold),
           ),
           const SizedBox(width: 8),
-          const Icon(Icons.person_add_alt_1_rounded, color: Colors.white70, size: 20),
+          const Icon(
+            Icons.person_add_alt_1_rounded,
+            color: Colors.white70,
+            size: 20,
+          ),
         ],
       ),
     );
@@ -1340,9 +1532,9 @@ class _PremiumPill extends StatelessWidget {
       ),
       child: Text(
         '$feature $premium',
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1355,7 +1547,9 @@ class _VisibilityBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = value == ListingVisibility.public ? RaabtaTheme.emeraldGreen : RaabtaTheme.electricBlue;
+    final color = value == ListingVisibility.public
+        ? RaabtaTheme.emeraldGreen
+        : RaabtaTheme.electricBlue;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -1365,9 +1559,9 @@ class _VisibilityBadge extends StatelessWidget {
       child: Text(
         value.name.toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
+          color: color,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -1396,18 +1590,39 @@ class _DismissBackground extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
-        mainAxisAlignment: alignment == Alignment.centerLeft ? MainAxisAlignment.start : MainAxisAlignment.end,
+        mainAxisAlignment: alignment == Alignment.centerLeft
+            ? MainAxisAlignment.start
+            : MainAxisAlignment.end,
         mainAxisSize: MainAxisSize.max,
         children: alignment == Alignment.centerLeft
-            ? [Icon(icon, color: color), const SizedBox(width: 8), Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700))]
-            : [Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700)), const SizedBox(width: 8), Icon(icon, color: color)],
+            ? [
+                Icon(icon, color: color),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w700),
+                ),
+              ]
+            : [
+                Text(
+                  label,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(width: 8),
+                Icon(icon, color: color),
+              ],
       ),
     );
   }
 }
 
 class _TabButton extends StatelessWidget {
-  const _TabButton({required this.label, required this.icon, required this.selected, required this.onTap});
+  const _TabButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String label;
   final IconData icon;
@@ -1417,7 +1632,9 @@ class _TabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? RaabtaTheme.electricBlue.withValues(alpha: 0.18) : Colors.transparent,
+      color: selected
+          ? RaabtaTheme.electricBlue.withValues(alpha: 0.18)
+          : Colors.transparent,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
@@ -1427,15 +1644,19 @@ class _TabButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: selected ? Colors.white : Colors.white60),
+              Icon(
+                icon,
+                size: 18,
+                color: selected ? Colors.white : Colors.white60,
+              ),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: selected ? Colors.white : Colors.white70,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
-                    ),
+                  color: selected ? Colors.white : Colors.white70,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
               ),
             ],
           ),
@@ -1463,9 +1684,19 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
-          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70)),
+          Text(
+            subtitle,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+          ),
         ],
       ),
     );
@@ -1514,16 +1745,18 @@ class _FilterPill extends StatelessWidget {
           decoration: BoxDecoration(
             color: RaabtaTheme.electricBlue.withValues(alpha: 0.16),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: RaabtaTheme.electricBlue.withValues(alpha: 0.28)),
+            border: Border.all(
+              color: RaabtaTheme.electricBlue.withValues(alpha: 0.28),
+            ),
           ),
           child: Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),
@@ -1552,18 +1785,15 @@ class _LegendPill extends StatelessWidget {
           Container(
             width: 8,
             height: 8,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 8),
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.88),
-                  fontWeight: FontWeight.w600,
-                ),
+              color: Colors.white.withValues(alpha: 0.88),
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -1596,8 +1826,14 @@ class _TrendLinePainter extends CustomPainter {
     for (var i = 1; i < points.length; i++) {
       final previous = points[i - 1];
       final current = points[i];
-      final controlPoint1 = Offset(previous.dx + (current.dx - previous.dx) * 0.45, previous.dy);
-      final controlPoint2 = Offset(previous.dx + (current.dx - previous.dx) * 0.55, current.dy);
+      final controlPoint1 = Offset(
+        previous.dx + (current.dx - previous.dx) * 0.45,
+        previous.dy,
+      );
+      final controlPoint2 = Offset(
+        previous.dx + (current.dx - previous.dx) * 0.55,
+        current.dy,
+      );
       path.cubicTo(
         controlPoint1.dx,
         controlPoint1.dy,
@@ -1613,7 +1849,11 @@ class _TrendLinePainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     final strokePaint = Paint()
       ..shader = LinearGradient(
-        colors: [RaabtaTheme.electricBlue, RaabtaTheme.emeraldGreen, RaabtaTheme.softGold],
+        colors: [
+          RaabtaTheme.electricBlue,
+          RaabtaTheme.emeraldGreen,
+          RaabtaTheme.softGold,
+        ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
@@ -1680,5 +1920,6 @@ class _RadialGaugePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _RadialGaugePainter oldDelegate) => oldDelegate.value != value;
+  bool shouldRepaint(covariant _RadialGaugePainter oldDelegate) =>
+      oldDelegate.value != value;
 }

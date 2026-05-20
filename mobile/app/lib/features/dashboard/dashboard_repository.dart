@@ -79,7 +79,19 @@ class DashboardRepository {
   /// Convert backend API listing JSON to dashboard ListingRecord
   ListingRecord _fromApiJson(Map<String, dynamic> json) {
     final listing = listing_model.Listing.fromJson(json);
-    return _toListing(listing);
+    final agent = json['agents'];
+    final listedBy = agent is Map<String, dynamic>
+        ? (agent['name']?.toString() ?? 'Unknown')
+        : 'Unknown';
+    final agencyName = agent is Map<String, dynamic>
+        ? (agent['agency_name']?.toString() ?? 'Unknown Agency')
+        : 'Unknown Agency';
+    final contactNumber = (json['owner_agent_id'] ?? '').toString();
+    return _toListing(listing).copyWith(
+      listedBy: listedBy,
+      agencyName: agencyName,
+      contactNumber: contactNumber,
+    );
   }
 
   String _formatPrice(int price) {
@@ -96,7 +108,7 @@ class DashboardRepository {
   /// then an empty result.
   Stream<List<ListingRecord>> watchListings() {
     if (AppConfig.hasBackend) {
-      return Stream.fromFuture(_fetchListingsFromApi()).handleError((e) {
+      return Stream.fromFuture(_fetchMapListingsFromApi()).handleError((e) {
         debugPrint('Backend listings error: $e');
         return <ListingRecord>[];
       });
@@ -136,19 +148,24 @@ class DashboardRepository {
     }
   }
 
-  Future<List<ListingRecord>> _fetchListingsFromApi() async {
+  Future<List<ListingRecord>> _fetchMapListingsFromApi() async {
     try {
-      final items = await _api.getListings();
+      final items = await _api.getMapListings();
       final records =
           items
               .map((e) => _fromApiJson(e as Map<String, dynamic>))
-              .where((record) => record.visibility == ListingVisibility.public)
+              .where((record) => record.status == ListingStatus.active)
+              .where(
+                (record) => record.latitude != null && record.longitude != null,
+              )
               .toList(growable: false)
             ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      debugPrint('✅ Loaded ${records.length} listings from backend API');
+      debugPrint(
+        'Loaded ${records.length} active map listings from /api/listings',
+      );
       return records;
     } catch (e) {
-      debugPrint('❌ Backend fetch failed, falling back: $e');
+      debugPrint('Backend map listings fetch failed: $e');
       return <ListingRecord>[];
     }
   }

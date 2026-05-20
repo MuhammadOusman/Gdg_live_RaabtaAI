@@ -84,19 +84,47 @@ class ApiService {
   }
 
   // --- Listings ---
-  Future<List<dynamic>> getListings() async {
-    await ensureAuthenticated();
+  Future<List<dynamic>> getMapListings() async {
     final url = Uri.parse('${AppConfig.backendUrl}/api/listings');
-    final response = await http.get(url, headers: _headers());
-    if (response.statusCode == 200) {
-      final decoded = jsonDecode(response.body);
-      if (decoded is List<dynamic>) return decoded;
-      if (decoded is Map<String, dynamic> && decoded['data'] is List<dynamic>) {
-        return decoded['data'] as List<dynamic>;
-      }
-      throw Exception('Unexpected listings response shape');
+    final response = await http.get(
+      url,
+      headers: {'Content-Type': 'application/json'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load map listings: ${response.statusCode}');
     }
-    throw Exception('Failed to load listings: ${response.statusCode}');
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is List<dynamic>) return decoded;
+    if (decoded is Map<String, dynamic> && decoded['data'] is List<dynamic>) {
+      return decoded['data'] as List<dynamic>;
+    }
+    throw Exception('Unexpected map listings response shape');
+  }
+
+  Future<List<dynamic>> getListings() async {
+    final url = Uri.parse('${AppConfig.backendUrl}/api/listings');
+
+    // Prefer global/public fetch without auth so backend does not scope by agent token.
+    var response = await http.get(
+      url,
+      headers: {'Content-Type': 'application/json'},
+    );
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await ensureAuthenticated();
+      response = await http.get(url, headers: _headers());
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load listings: ${response.statusCode}');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is List<dynamic>) return decoded;
+    if (decoded is Map<String, dynamic> && decoded['data'] is List<dynamic>) {
+      return decoded['data'] as List<dynamic>;
+    }
+    throw Exception('Unexpected listings response shape');
   }
 
   Future<List<dynamic>> getMyListings() async {

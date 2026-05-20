@@ -4,6 +4,8 @@ import 'dotenv/config';
 const supabaseUrl = process.env.SUPABASE_URL || 'https://placeholder.supabase.co'
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'placeholder-key'
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: { enabled: false }
+});
 
 export default supabase;

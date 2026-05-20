@@ -2,7 +2,11 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { handleMessage, confirmAndSave } from './orchestrator/index.js';
-import './agents/janitor/cron.js';
+
+// Only import cron scheduler when running locally (not on Vercel serverless)
+if (!process.env.VERCEL) {
+    import('./agents/janitor/cron.js').catch(() => {});
+}
 
 const app = express();
 app.use(cors());
@@ -86,10 +90,13 @@ app.post('/api/recommender/run', async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`\n🚀 Raabta AI — port ${PORT}`);
-    console.log(`📡 http://localhost:${PORT}/health\n`);
-});
+// Only start listening when running locally (Vercel handles this automatically)
+if (!process.env.VERCEL) {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+        console.log(`\n🚀 Raabta AI — port ${PORT}`);
+        console.log(`📡 http://localhost:${PORT}/health\n`);
+    });
+}
 
 export default app;

@@ -1,11 +1,18 @@
 import { GoogleGenAI } from '@google/genai';
 import 'dotenv/config';
 
-const ai = new GoogleGenAI({
-    vertexai: true,
-    project: process.env.GOOGLE_CLOUD_PROJECT,
-    location: 'us-central1',
-});
+let ai;
+if (process.env.GEMINI_API_KEY) {
+    console.log('[Gemini Client] Initializing standard Gemini Developer API...');
+    ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+} else {
+    console.log('[Gemini Client] Initializing GCP Vertex AI...');
+    ai = new GoogleGenAI({
+        vertexai: true,
+        project: process.env.GOOGLE_CLOUD_PROJECT || 'sonic-diorama-474318-f5',
+        location: 'us-central1',
+    });
+}
 
 const RETRY_DELAYS_MS = [500, 1000]; // 2 retries: 500ms then 1000ms
 

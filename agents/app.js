@@ -59,36 +59,76 @@ app.get('/api/listings', async (req, res) => {
     }
 });
 
-// ── Manual Janitor Trigger ─────────────────────────────
-app.post('/api/janitor/run', async (req, res) => {
+// ── Janitor Trigger (Supports GET for Cron, POST for manual) ────────
+const handleJanitorRun = async (req, res) => {
     try {
-        const { runDailyReview, autoArchiveStale, refreshBlockStats } = await import('./agents/janitor/index.js');
-        console.log('[API] Manually triggering Janitor routines...');
+        const { autoArchiveStale, refreshBlockStats } = await import('./agents/janitor/index.js');
+        console.log('[API] Triggering Janitor routines...');
         const stats = await refreshBlockStats();
         const archived = await autoArchiveStale();
-        res.json({ status: 'success', message: 'Janitor routines executed successfully', stats_updated_count: stats.length, archived_count: archived.length });
+        res.json({
+            status: 'success',
+            message: 'Janitor routines executed successfully',
+            stats_updated_count: stats.length,
+            archived_count: archived.length
+        });
     } catch (err) {
         console.error('[API Janitor] Error:', err.message);
         res.status(500).json({ error: err.message });
     }
-});
+};
+app.get('/api/janitor/run', handleJanitorRun);
+app.post('/api/janitor/run', handleJanitorRun);
 
-// ── Manual Recommender Trigger ─────────────────────────
-app.post('/api/recommender/run', async (req, res) => {
+// ── Recommender Trigger (Supports GET for Cron, POST for manual) ───
+const handleRecommenderRun = async (req, res) => {
     try {
         const { generateRecommendations } = await import('./agents/recommender/index.js');
-        const { agent_id } = req.body;
-        if (!agent_id) {
-            return res.status(400).json({ error: 'agent_id required' });
+        const agent_id = req.query.agent_id || req.body?.agent_id;
+
+        if (agent_id) {
+            console.log(`[API] Triggering Recommender for single agent ${agent_id}...`);
+            const result = await generateRecommendations(agent_id);
+            return res.json({ status: 'success', recommendations: result.recommendations });
         }
-        console.log(`[API] Manually triggering Recommender for agent ${agent_id}...`);
-        const result = await generateRecommendations(agent_id);
-        res.json({ status: 'success', recommendations: result.recommendations });
+
+        // If no agent_id is provided, run for all agents with active listings (Cron mode)
+        console.log('[API] Triggering Recommender for all active agents (Cron Mode)...');
+        const { default: supabase } = await import('./services/supabaseClient.js');
+        const { data: listings, error } = await supabase
+            .from('listings')
+            .select('owner_agent_id')
+            .eq('status', 'active');
+
+        if (error) throw error;
+
+        const agentIds = [...new Set((listings || []).map(l => l.owner_agent_id).filter(Boolean))];
+        console.log(`[API Cron] Found ${agentIds.length} unique agent(s) to generate recommendations for`);
+
+        const processed = [];
+        for (const id of agentIds) {
+            try {
+                await generateRecommendations(id);
+                processed.push({ agent_id: id, status: 'success' });
+            } catch (innerErr) {
+                console.error(`[API Cron] Recommender failed for agent ${id}:`, innerErr.message);
+                processed.push({ agent_id: id, status: 'failed', error: innerErr.message });
+            }
+        }
+
+        res.json({
+            status: 'success',
+            message: 'Recommender cron completed',
+            processed_count: processed.length,
+            details: processed
+        });
     } catch (err) {
         console.error('[API Recommender] Error:', err.message);
         res.status(500).json({ error: err.message });
     }
-});
+};
+app.get('/api/recommender/run', handleRecommenderRun);
+app.post('/api/recommender/run', handleRecommenderRun);
 
 // Only start listening when running locally (Vercel handles this automatically)
 if (!process.env.VERCEL) {

@@ -51,7 +51,7 @@ class ListingCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(26),
           onTap: onTap,
           child: Padding(
-            padding: EdgeInsets.all(compact ? 16 : 18),
+            padding: EdgeInsets.all(compact ? 12 : 18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -59,60 +59,71 @@ class ListingCard extends StatelessWidget {
                 Row(
                   children: [
                     Container(
-                      width: 10,
-                      height: 10,
+                      width: 8,
+                      height: 8,
                       decoration: BoxDecoration(
                         color: accent,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
                             color: accent.withValues(alpha: 0.6),
-                            blurRadius: 12,
-                            spreadRadius: 2,
+                            blurRadius: 10,
+                            spreadRadius: 1.5,
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         listing.blockName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                        style: (compact
+                                ? Theme.of(context).textTheme.titleSmall
+                                : Theme.of(context).textTheme.titleMedium)
+                            ?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    trailing ?? const SizedBox.shrink(),
+                    if (!compact) trailing ?? const SizedBox.shrink(),
                   ],
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: compact ? 8 : 14),
                 Text(
                   listing.priceLabel,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.9,
-                      ),
+                  style: (compact
+                          ? Theme.of(context).textTheme.titleMedium
+                          : Theme.of(context).textTheme.headlineSmall)
+                      ?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.9,
+                  ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   listing.sizeLabel,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w500,
-                      ),
+                  style: (compact
+                          ? Theme.of(context).textTheme.bodySmall
+                          : Theme.of(context).textTheme.bodyMedium)
+                      ?.copyWith(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  listing.notesSnippet,
-                  maxLines: compact ? 1 : 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.82),
-                        height: 1.3,
-                      ),
-                ),
+                if (!compact) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    listing.notesSnippet,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.82),
+                          height: 1.3,
+                        ),
+                  ),
+                ],
               ],
             ),
           ),

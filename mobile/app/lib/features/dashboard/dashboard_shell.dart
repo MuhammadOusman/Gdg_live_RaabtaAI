@@ -2,8 +2,9 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../match/match_chat_screen.dart';
 
 import '../../app/app_theme.dart';
 import 'dashboard_controller.dart';
@@ -20,7 +21,6 @@ class RaabtaDashboardShell extends StatelessWidget {
       body: Stack(
         children: const [
           _TabHost(),
-          _OrchestrationBar(),
           _FloatingToast(),
           _BottomNavShell(),
         ],
@@ -41,106 +41,13 @@ class _TabHost extends StatelessWidget {
           children: const [
             PulseMapScreen(),
             VaultScreen(),
-            MatchFeedScreen(),
+            // Match tab now uses the chat interface
+            // ignore: prefer_const_constructors
+            MatchChatScreen(),
             InsightsScreen(),
           ],
         );
       },
-    );
-  }
-}
-
-class _OrchestrationBar extends StatefulWidget {
-  const _OrchestrationBar();
-
-  @override
-  State<_OrchestrationBar> createState() => _OrchestrationBarState();
-}
-
-class _OrchestrationBarState extends State<_OrchestrationBar>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 8),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final stages = [
-      (label: 'Ingesting', color: RaabtaTheme.electricBlue),
-      (label: 'Parsing', color: const Color(0xFF8E44AD)),
-      (label: 'Verifying', color: RaabtaTheme.softGold),
-      (label: 'Match Found', color: RaabtaTheme.emeraldGreen),
-    ];
-
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-              child: Container(
-                height: 28,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: AnimatedBuilder(
-                  animation: _controller,
-                  builder: (context, _) {
-                    final progress = _controller.value * stages.length;
-                    return Stack(
-                      children: [
-                        Row(
-                          children: List.generate(stages.length, (index) {
-                            final active = progress >= index + 1;
-                            final stage = stages[index];
-                            return Expanded(
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 250),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      stage.color.withValues(alpha: active ? 0.88 : 0.2),
-                                      stage.color.withValues(alpha: active ? 0.38 : 0.05),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
-                        Center(
-                          child: Text(
-                            'Silent orchestration: ${stages[progress.floor().clamp(0, stages.length - 1)].label}',
-                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.92),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -151,7 +58,7 @@ class _FloatingToast extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      top: 56,
+      top: 16,
       left: 0,
       right: 0,
       child: SafeArea(
@@ -255,116 +162,275 @@ class _BottomNavShell extends StatelessWidget {
   }
 }
 
-class PulseMapScreen extends StatelessWidget {
+class PulseMapScreen extends StatefulWidget {
   const PulseMapScreen({super.key});
 
-  static const String _mapStyle = '''[
-  {"elementType":"geometry","stylers":[{"color":"#14171d"}]},
-  {"elementType":"labels.text.fill","stylers":[{"color":"#7f8c8d"}]},
-  {"elementType":"labels.text.stroke","stylers":[{"color":"#14171d"}]},
-  {"featureType":"administrative","elementType":"geometry.stroke","stylers":[{"color":"#2c313a"}]},
-  {"featureType":"landscape","elementType":"geometry","stylers":[{"color":"#0f1115"}]},
-  {"featureType":"poi","elementType":"geometry","stylers":[{"color":"#1a1d24"}]},
-  {"featureType":"road","elementType":"geometry.fill","stylers":[{"color":"#1d2128"}]},
-  {"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#2a2f38"}]},
-  {"featureType":"transit","elementType":"geometry","stylers":[{"color":"#1a1d24"}]},
-  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#06070a"}]}
-]''';
+  @override
+  State<PulseMapScreen> createState() => _PulseMapScreenState();
+}
+
+class _PulseMapScreenState extends State<PulseMapScreen> {
+  late final ScrollController _carouselController = ScrollController();
+  GoogleMapController? _googleMapController;
+
+  static const CameraPosition _kKarachi = CameraPosition(
+    target: LatLng(24.91, 67.08),
+    zoom: 12.2,
+  );
+
+  static const String _darkMapStyleJson = r'''
+[
+  {
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#14171d"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#8ec3b9"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.text.stroke",
+    "stylers": [
+      {
+        "color": "#1a1c22"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative.country",
+    "elementType": "geometry.stroke",
+    "stylers": [
+      {
+        "color": "#4b5366"
+      }
+    ]
+  },
+  {
+    "featureType": "landscape",
+    "stylers": [
+      {
+        "color": "#14171d"
+      }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#1a1e27"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry.stroke",
+    "stylers": [
+      {
+        "color": "#212733"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#2c3344"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry.stroke",
+    "stylers": [
+      {
+        "color": "#3b4458"
+      }
+    ]
+  },
+  {
+    "featureType": "transit",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#0d1b2a"
+      }
+    ]
+  }
+]
+''';
+
+  @override
+  void dispose() {
+    _carouselController.dispose();
+    _googleMapController?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<DashboardController>(
       builder: (context, controller, _) {
-        final markers = <Marker>{};
-        final circles = <Circle>{};
+        // Build interactive markers from listings
+        final Set<Marker> myMarkers = controller.unfilteredListings
+            .where((listing) => listing.hasCoordinates)
+            .map((listing) {
+          final matchesFilter = controller.selectedWorkAreas.isEmpty ||
+              controller.selectedWorkAreas.contains(listing.workArea);
 
-        for (final listing in controller.listings) {
-          final hue = switch (listing.signalTone) {
-            ListingTone.standard => BitmapDescriptor.hueAzure,
-            ListingTone.newListing => BitmapDescriptor.hueGreen,
-            ListingTone.hot => BitmapDescriptor.hueOrange,
-          };
+          // Style markers of selected work areas with colorful hues, and others with a grey/slate hue
+          double markerHue = 200.0; // Slate-grey for greyed out areas
+          if (matchesFilter) {
+            if (listing.demandRatio >= 2.0) {
+              markerHue = BitmapDescriptor.hueRed;
+            } else if (listing.blockName.contains('H') || listing.blockName.contains('15')) {
+              markerHue = BitmapDescriptor.hueGreen;
+            } else if (listing.blockName.contains('N')) {
+              markerHue = BitmapDescriptor.hueYellow;
+            } else {
+              markerHue = BitmapDescriptor.hueAzure;
+            }
+          }
 
-          markers.add(
-            Marker(
-              markerId: MarkerId(listing.id),
-              position: LatLng(listing.latitude, listing.longitude),
-              icon: BitmapDescriptor.defaultMarkerWithHue(hue),
-              infoWindow: InfoWindow(
-                title: listing.blockName,
-                snippet: '${listing.priceLabel} • ${listing.sizeLabel}',
-              ),
+          return Marker(
+            markerId: MarkerId(listing.id),
+            position: LatLng(listing.latitude!, listing.longitude!),
+            icon: BitmapDescriptor.defaultMarkerWithHue(markerHue),
+            alpha: matchesFilter ? 1.0 : 0.45,
+            infoWindow: InfoWindow(
+              title: '${listing.blockName} • ${listing.priceLabel}',
+              snippet: listing.notesSnippet,
             ),
-          );
+            onTap: () {
+              final wasFiltered = controller.selectedWorkAreas.isNotEmpty;
+              if (wasFiltered && !matchesFilter) {
+                controller.setWorkAreas([listing.workArea]);
+                controller.showToast('Focused on ${listing.workArea}');
+              } else {
+                controller.showToast('${listing.blockName} • ${listing.priceLabel} Selected');
+              }
 
-          if (listing.signalTone == ListingTone.newListing) {
-            circles.add(
-              Circle(
-                circleId: CircleId('${listing.id}_new'),
-                center: LatLng(listing.latitude, listing.longitude),
-                radius: 95,
-                fillColor: RaabtaTheme.emeraldGreen.withValues(alpha: 0.16),
-                strokeColor: RaabtaTheme.emeraldGreen.withValues(alpha: 0.5),
-                strokeWidth: 2,
-              ),
-            );
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final index = controller.listings.indexWhere((l) => l.id == listing.id);
+                if (index != -1 && _carouselController.hasClients) {
+                  _carouselController.animateTo(
+                    index * 232.0,
+                    duration: const Duration(milliseconds: 350),
+                    curve: Curves.easeOutCubic,
+                  );
+                }
+              });
+            },
+          );
+        }).toSet();
+
+        // Build premium demand heatmap circles based on block statistics
+        final Set<Circle> demandHeatmapCircles = controller.unfilteredBlockStats.map((stat) {
+          String inferredArea = 'North Nazimabad';
+          final name = stat.blockName.toLowerCase();
+          if (name.contains('13d') || name.contains('gulshan')) {
+            inferredArea = 'Gulshan';
+          } else if (name.contains('9') || name.contains('scheme')) {
+            inferredArea = 'Scheme 33';
+          } else if (name.contains('k') || name.contains('north karachi')) {
+            inferredArea = 'North Karachi';
+          } else if (name.contains('pechs')) {
+            inferredArea = 'PECHS';
+          } else if (name.contains('nazimabad block 3')) {
+            inferredArea = 'Nazimabad';
           }
 
-          if (listing.signalTone == ListingTone.hot) {
-            circles.add(
-              Circle(
-                circleId: CircleId('${listing.id}_hot'),
-                center: LatLng(listing.latitude, listing.longitude),
-                radius: 130,
-                fillColor: RaabtaTheme.softGold.withValues(alpha: 0.14),
-                strokeColor: RaabtaTheme.signalRed.withValues(alpha: 0.72),
-                strokeWidth: 2,
-              ),
-            );
-          }
-        }
+          final matchesFilter = controller.selectedWorkAreas.isEmpty ||
+              controller.selectedWorkAreas.contains(inferredArea);
 
-        for (final stat in controller.blockStats) {
-          if (stat.demandRatio <= 2.0) {
-            continue;
+          // Beautiful geographic clustering centers for key blocks in Karachi
+          double lat = 24.91;
+          double lng = 67.10;
+          if (stat.blockName.contains('Nazimabad')) {
+            lat = 24.93;
+            lng = 67.04;
+          } else if (stat.blockName.contains('PECHS')) {
+            lat = 24.87;
+            lng = 67.05;
+          } else if (stat.blockName.contains('Gulshan')) {
+            lat = 24.91;
+            lng = 67.10;
+          } else if (stat.blockName.contains('Scheme 33')) {
+            lat = 24.95;
+            lng = 67.12;
           }
-          final anchor = controller.listings.firstWhere(
-            (listing) => listing.blockName == stat.blockName,
-            orElse: () => controller.listings.isNotEmpty ? controller.listings.first : DashboardFixtures.listings.first,
+
+          final Color circleColor = matchesFilter 
+              ? RaabtaTheme.emeraldGreen.withValues(alpha: 0.16)
+              : Colors.grey.withValues(alpha: 0.05);
+
+          final Color strokeColor = matchesFilter 
+              ? RaabtaTheme.emeraldGreen.withValues(alpha: 0.3)
+              : Colors.grey.withValues(alpha: 0.1);
+
+          return Circle(
+            circleId: CircleId(stat.blockName),
+            center: LatLng(lat, lng),
+            radius: 350.0 * (stat.demandRatio / 2.0).clamp(0.5, 4.0),
+            fillColor: circleColor,
+            strokeColor: strokeColor,
+            strokeWidth: 2,
           );
-          circles.add(
-            Circle(
-              circleId: CircleId('demand_${stat.blockName}'),
-              center: LatLng(anchor.latitude, anchor.longitude),
-              radius: 350 + (stat.demandRatio * 70),
-              fillColor: const Color(0xFFE74C3C).withValues(alpha: 0.08),
-              strokeColor: const Color(0xFFE74C3C).withValues(alpha: 0.32),
-              strokeWidth: 2,
-            ),
-          );
-        }
+        }).toSet();
 
         return Stack(
           children: [
             Positioned.fill(
               child: GoogleMap(
-                initialCameraPosition: const CameraPosition(
-                  target: LatLng(24.9326, 67.045),
-                  zoom: 11.4,
-                ),
-                style: _mapStyle,
+                initialCameraPosition: _kKarachi,
+                onMapCreated: (googleController) {
+                  _googleMapController = googleController;
+                },
+                style: _darkMapStyleJson,
+                markers: myMarkers,
+                circles: demandHeatmapCircles,
                 myLocationButtonEnabled: false,
                 zoomControlsEnabled: false,
                 mapToolbarEnabled: false,
-                compassEnabled: false,
-                markers: markers,
-                circles: circles,
-                padding: const EdgeInsets.only(top: 140, bottom: 120),
-                onMapCreated: (_) {},
               ),
             ),
+            // Search bar + filter pill
             Positioned(
-              top: 72,
+              top: 20,
               left: 16,
               right: 16,
               child: SafeArea(
@@ -397,22 +463,43 @@ class PulseMapScreen extends StatelessWidget {
                 ),
               ),
             ),
+            // Listing cards carousel at bottom
+            if (controller.listings.isNotEmpty)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 100,
+                child: SizedBox(
+                  height: 140,
+                  child: ListView.separated(
+                    controller: _carouselController,
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: controller.listings.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final listing = controller.listings[index];
+                      return SizedBox(
+                        width: 220,
+                        child: ListingCard(listing: listing, compact: true),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            // Legend
             Positioned(
               left: 16,
-              right: 16,
-              bottom: 116,
-              child: SafeArea(
-                top: false,
-                child: Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: const [
-                    _LegendPill(color: RaabtaTheme.electricBlue, label: 'Plot'),
-                    _LegendPill(color: RaabtaTheme.emeraldGreen, label: 'New'),
-                    _LegendPill(color: RaabtaTheme.softGold, label: 'Hot'),
-                    _LegendPill(color: RaabtaTheme.signalRed, label: 'Demand > 2.0'),
-                  ],
-                ),
+              bottom: 250,
+              child: Wrap(
+                direction: Axis.vertical,
+                spacing: 6,
+                children: const [
+                  _LegendPill(color: RaabtaTheme.electricBlue, label: 'Plot'),
+                  _LegendPill(color: RaabtaTheme.emeraldGreen, label: 'New'),
+                  _LegendPill(color: RaabtaTheme.softGold, label: 'Hot'),
+                  _LegendPill(color: RaabtaTheme.signalRed, label: 'Demand > 2.0'),
+                ],
               ),
             ),
           ],
@@ -503,7 +590,6 @@ class PulseMapScreen extends StatelessWidget {
     );
   }
 }
-
 class VaultScreen extends StatelessWidget {
   const VaultScreen({super.key});
 
@@ -641,19 +727,33 @@ class MatchFeedScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 72, 16, 96),
         child: Consumer<DashboardController>(
           builder: (context, controller, _) {
-            return ListView.separated(
-              itemCount: controller.matchLeads.isEmpty ? 1 : controller.matchLeads.length,
-              separatorBuilder: (context, _) => const SizedBox(height: 14),
-              itemBuilder: (context, index) {
-                if (controller.matchLeads.isEmpty) {
-                  return const _EmptyState(
-                    title: 'No matches yet',
-                    subtitle: 'Realtime notifications will appear here as the engine finds fit.',
-                  );
-                }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Match Center', style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 6),
+                Text(
+                  'AI-powered connections between sellers and buyers.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: controller.matchLeads.isEmpty ? 1 : controller.matchLeads.length,
+                    separatorBuilder: (context, _) => const SizedBox(height: 14),
+                    itemBuilder: (context, index) {
+                      if (controller.matchLeads.isEmpty) {
+                        return const _EmptyState(
+                          title: 'No matches yet',
+                          subtitle: 'Realtime notifications will appear here as the engine finds fit.',
+                        );
+                      }
 
-                return _MatchCard(lead: controller.matchLeads[index]);
-              },
+                      return _MatchCard(lead: controller.matchLeads[index]);
+                    },
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -705,7 +805,7 @@ class _MatchCardState extends State<_MatchCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Reasoning: ${widget.lead.reasoningTrace}',
+                  widget.lead.reasoningTrace,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         height: 1.35,
                         color: Colors.white.withValues(alpha: 0.92),

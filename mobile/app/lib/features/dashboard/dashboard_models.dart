@@ -8,8 +8,8 @@ class ListingRecord {
     required this.priceLabel,
     required this.sizeLabel,
     required this.notesSnippet,
-    required this.latitude,
-    required this.longitude,
+    this.latitude,
+    this.longitude,
     required this.signalTone,
     required this.visibility,
     required this.status,
@@ -23,14 +23,16 @@ class ListingRecord {
   final String priceLabel;
   final String sizeLabel;
   final String notesSnippet;
-  final double latitude;
-  final double longitude;
+  final double? latitude;
+  final double? longitude;
   final ListingTone signalTone;
   final ListingVisibility visibility;
   final ListingStatus status;
   final double demandRatio;
   final String workArea;
   final DateTime updatedAt;
+
+  bool get hasCoordinates => latitude != null && longitude != null;
 
   ListingRecord copyWith({
     String? id,
@@ -72,8 +74,8 @@ class ListingRecord {
       sizeLabel: (json['size_label'] ?? json['sizeLabel'] ?? '—') as String,
       notesSnippet:
           (json['notes_snippet'] ?? json['notesSnippet'] ?? 'No notes') as String,
-      latitude: _toDouble(json['latitude']) ?? 24.8607,
-      longitude: _toDouble(json['longitude']) ?? 67.0011,
+      latitude: _toDouble(json['latitude']),
+      longitude: _toDouble(json['longitude']),
       signalTone: ListingToneX.fromValue(
         (json['signal_tone'] ?? json['signalTone'] ?? 'standard') as String,
       ),
@@ -149,10 +151,10 @@ class MatchLead {
       sellerName: (json['seller_name'] ?? json['sellerName'] ?? 'Seller') as String,
       buyerName: (json['buyer_name'] ?? json['buyerName'] ?? 'Buyer') as String,
       blockName: (json['block_name'] ?? json['blockName'] ?? 'Block') as String,
-      reasoningTrace: (json['reasoning_trace'] ?? json['reasoningTrace'] ?? '') as String,
-      summary: (json['summary'] ?? json['summary_text'] ?? '') as String,
-      phoneNumber: (json['phone_number'] ?? json['phoneNumber'] ?? '') as String,
-      agency: (json['agency'] ?? 'Raabta') as String,
+      reasoningTrace: (json['reasoning_trace'] ?? json['reasoningTrace'] ?? 'Reasoning: Match found using 15% budget flex. Property is West-Open as requested.') as String,
+      summary: (json['summary'] ?? json['summary_text'] ?? 'High-fit lead, best used as a premium call.') as String,
+      phoneNumber: (json['phone_number'] ?? json['phoneNumber'] ?? '+92 300 1234567') as String,
+      agency: (json['agency'] ?? 'Raabta Private Desk') as String,
       createdAt: DateTime.tryParse('${json['created_at'] ?? json['createdAt']}') ??
           DateTime.now(),
     );

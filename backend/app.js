@@ -13,7 +13,7 @@ import mapRoutes from './routes/map.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 
 app.get('/health', (req, res) => res.json({
@@ -30,7 +30,13 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/map', mapRoutes);
 
-app.listen(PORT, () => {
-    console.log(`\n🚀 Raabta AI Backend — port ${PORT}`);
-    console.log(`🔗 http://localhost:${PORT}/health\n`);
-});
+// Export for Vercel serverless — only listen locally
+if (process.env.VERCEL !== '1') {
+    app.listen(PORT, () => {
+        console.log(`\n🚀 Raabta AI Backend — port ${PORT}`);
+        console.log(`🔗 http://localhost:${PORT}/health\n`);
+    });
+}
+
+export default app;
+

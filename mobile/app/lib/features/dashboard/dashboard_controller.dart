@@ -7,7 +7,12 @@ import 'dashboard_repository.dart';
 
 class DashboardController extends ChangeNotifier {
   DashboardController(this._repository) {
-    _selectedWorkAreas.addAll(_repository.getWorkAreas());
+    // Seed with fixtures immediately so the UI is never empty
+    _remoteListings.addAll(DashboardFixtures.listings);
+    _blockStats.addAll(DashboardFixtures.blockStats);
+    _matchLeads.addAll(DashboardFixtures.matchLeads);
+    _leaderboard.addAll(DashboardFixtures.leaderboard);
+
     _bindStreams();
     _loadLeaderboard();
   }
@@ -38,6 +43,7 @@ class DashboardController extends ChangeNotifier {
   List<LeaderboardEntry> get leaderboard => List.unmodifiable(_leaderboard);
   List<MarketPremium> get premiums => _repository.getPremiums();
 
+  /// All active listings filtered by work area
   List<ListingRecord> get listings {
     final visible = _remoteListings.map((listing) {
       final mergedVisibility = _visibilityOverrides[listing.id] ?? listing.visibility;
@@ -58,11 +64,45 @@ class DashboardController extends ChangeNotifier {
     return visible;
   }
 
+  /// All active listings unfiltered by work area for map visualization
+  List<ListingRecord> get unfilteredListings {
+    final visible = _remoteListings.map((listing) {
+      final mergedVisibility = _visibilityOverrides[listing.id] ?? listing.visibility;
+      final mergedStatus = _archivedListingIds.contains(listing.id)
+          ? ListingStatus.archived
+          : listing.status;
+
+      return listing.copyWith(
+        visibility: mergedVisibility,
+        status: mergedStatus,
+      );
+    }).where((listing) {
+      return listing.status == ListingStatus.active;
+    }).toList(growable: false);
+
+    visible.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return visible;
+  }
+
+  List<BlockMarketStat> get unfilteredBlockStats => _blockStats
+      .toList(growable: false)
+    ..sort((a, b) => b.demandRatio.compareTo(a.demandRatio));
+
+  /// Vault listings — all active listings (private or public) for the agent
   List<ListingRecord> get vaultListings {
-    final filtered = listings
-        .where((listing) => listing.visibility == _vaultFilter)
-        .toList(growable: false);
-    return filtered;
+    // Show ALL listings regardless of work area filter for the vault
+    final all = _remoteListings.map((listing) {
+      final mergedVisibility = _visibilityOverrides[listing.id] ?? listing.visibility;
+      final mergedStatus = _archivedListingIds.contains(listing.id)
+          ? ListingStatus.archived
+          : listing.status;
+      return listing.copyWith(visibility: mergedVisibility, status: mergedStatus);
+    }).where((listing) {
+      return listing.status == ListingStatus.active && listing.visibility == _vaultFilter;
+    }).toList(growable: false);
+
+    all.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return all;
   }
 
   List<BlockMarketStat> get blockStats => _blockStats
@@ -75,41 +115,47 @@ class DashboardController extends ChangeNotifier {
   Future<void> _loadLeaderboard() async {
     try {
       final entries = await _repository.fetchLeaderboard();
-      _leaderboard
-        ..clear()
-        ..addAll(entries);
-      notifyListeners();
+      if (entries.isNotEmpty) {
+        _leaderboard
+          ..clear()
+          ..addAll(entries);
+        notifyListeners();
+      }
     } catch (e) {
-      print('Error loading leaderboard: $e');
-      // Keep using empty list or fixtures
+      debugPrint('Error loading leaderboard: $e');
     }
   }
 
   void _bindStreams() {
     _listingsSub = _repository.watchListings().listen((data) {
-      _remoteListings
-        ..clear()
-        ..addAll(data);
-      notifyListeners();
+      if (data.isNotEmpty) {
+        _remoteListings
+          ..clear()
+          ..addAll(data);
+        notifyListeners();
+      }
     });
 
     _statsSub = _repository.watchBlockStats().listen((data) {
-      _blockStats
-        ..clear()
-        ..addAll(data);
-      notifyListeners();
+      if (data.isNotEmpty) {
+        _blockStats
+          ..clear()
+          ..addAll(data);
+        notifyListeners();
+      }
     });
 
     _matchesSub = _repository.watchMatchLeads().listen((data) {
-      _matchLeads
-        ..clear()
-        ..addAll(data);
+      if (data.isNotEmpty) {
+        _matchLeads
+          ..clear()
+          ..addAll(data);
 
-      if (data.isNotEmpty && data.first.id != _lastNotifiedMatchId) {
-        _lastNotifiedMatchId = data.first.id;
-        showToast('🎯 Match Found in ${data.first.blockName}. Tap to view.');
+        if (data.first.id != _lastNotifiedMatchId) {
+          _lastNotifiedMatchId = data.first.id;
+          showToast('🎯 Match Found in ${data.first.blockName}. Tap to view.');
+        }
       }
-
       notifyListeners();
     });
   }
@@ -142,7 +188,7 @@ class DashboardController extends ChangeNotifier {
 
   void markSold(String listingId) {
     _archivedListingIds.add(listingId);
-    showToast('Archived as sold.');
+    showToast('✅ Archived as sold.');
     notifyListeners();
   }
 
@@ -157,7 +203,7 @@ class DashboardController extends ChangeNotifier {
         ? ListingVisibility.public
         : ListingVisibility.private;
     _visibilityOverrides[listing.id] = next;
-    showToast('Switched to ${next.name.toUpperCase()}.');
+    showToast('🔄 Switched to ${next.name.toUpperCase()}.');
     notifyListeners();
   }
 

@@ -1,12 +1,19 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:flutter/foundation.dart';
+import 'dart:io' show Platform;
+
 class AppConfig {
   static String supabaseUrl = '';
   static String supabaseAnonKey = '';
+  static String backendUrl = '';
+  static String agentPhone = '';
+  static String agentName = '';
 
   static bool get hasSupabase =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
+  static bool get hasBackend => backendUrl.isNotEmpty;
 }
 
 class AppBootstrap {
@@ -17,6 +24,18 @@ class AppBootstrap {
 
       AppConfig.supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
       AppConfig.supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+
+      String backend = dotenv.env['BACKEND_URL'] ?? 'http://localhost:3000';
+      if (!kIsWeb) {
+        try {
+          if (Platform.isAndroid && (backend.contains('localhost') || backend.contains('127.0.0.1'))) {
+            backend = backend.replaceAll('localhost', '10.0.2.2').replaceAll('127.0.0.1', '10.0.2.2');
+          }
+        } catch (_) {}
+      }
+      AppConfig.backendUrl = backend;
+      AppConfig.agentPhone = dotenv.env['AGENT_PHONE'] ?? '+923001234567';
+      AppConfig.agentName = dotenv.env['AGENT_NAME'] ?? 'Muhammad Ousman';
 
       if (AppConfig.hasSupabase) {
         await Supabase.initialize(

@@ -1,6 +1,15 @@
-# app
+# RaabtaAI mobile app
 
-A new Flutter project.
+## Environment
+
+Set `GOOGLE_MAPS_API_KEY` before running or building Android:
+
+```powershell
+$env:GOOGLE_MAPS_API_KEY="your-google-maps-api-key"
+flutter run
+```
+
+For web, copy `web/env.example.js` to `web/env.js` and set the same key there. Keep `web/env.js` untracked.
 
 ## Getting Started
 

@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:raabta_ai/models/listing.dart' as listing_model;
 import 'package:raabta_ai/services/listing_service.dart';
 import 'package:raabta_ai/services/agent_service.dart';
+import 'package:raabta_ai/services/api_service.dart';
 
 import '../../app/app_config.dart';
 import 'dashboard_models.dart';
@@ -9,6 +11,7 @@ import 'dashboard_models.dart';
 class DashboardRepository {
   late ListingService _listingService;
   late AgentService _agentService;
+  final ApiService _api = ApiService();
 
   DashboardRepository() {
     _listingService = ListingService();
@@ -17,7 +20,6 @@ class DashboardRepository {
 
   /// Convert Supabase Listing model to dashboard ListingRecord
   ListingRecord _toListing(listing_model.Listing listing) {
-    // Determine signal tone based on is_hot_property and creation date
     ListingTone tone = ListingTone.standard;
     if (listing.isHotProperty) {
       tone = ListingTone.hot;
@@ -28,31 +30,19 @@ class DashboardRepository {
       }
     }
 
-    // Determine visibility
     final visibility = listing.isPublic ? ListingVisibility.public : ListingVisibility.private;
-
-    // Determine status
     final status = listing.status == 'archived' || listing.status == 'sold'
         ? ListingStatus.archived
         : ListingStatus.active;
 
-    // Format price label
-    final priceLabel = listing.demandPrice != null
-        ? _formatPrice(listing.demandPrice!)
-        : '—';
-
-    // Format size label
-    final sizeLabel = listing.size != null
-        ? '${listing.size} ${listing.unit}'
-        : '—';
-
-    // Get first note or snippet
-    final notesSnippet = listing.notes.isNotEmpty
-        ? '${listing.notes.first}'.substring(0, 60)
-        : 'No notes';
-
-    // Calculate demand ratio (stub for now - would need more complex logic)
-    final demandRatio = 1.0;
+    final priceLabel = listing.demandPrice != null ? _formatPrice(listing.demandPrice!) : '—';
+    final sizeLabel = listing.size != null ? '${listing.size} ${listing.unit}' : '—';
+    final firstNote = listing.notes.isNotEmpty ? '${listing.notes.first}' : '';
+    final notesSnippet = firstNote.length > 60
+        ? '${firstNote.substring(0, 60)}...'
+        : firstNote.isNotEmpty
+            ? firstNote
+            : 'No notes';
 
     return ListingRecord(
       id: listing.id,
@@ -60,15 +50,21 @@ class DashboardRepository {
       priceLabel: priceLabel,
       sizeLabel: sizeLabel,
       notesSnippet: notesSnippet,
-      latitude: listing.latitude ?? 24.8607,
-      longitude: listing.longitude ?? 67.0011,
+      latitude: listing.latitude != null && listing.latitude != 0.0 ? listing.latitude! : null,
+      longitude: listing.longitude != null && listing.longitude != 0.0 ? listing.longitude! : null,
       signalTone: tone,
       visibility: visibility,
       status: status,
-      demandRatio: demandRatio,
+      demandRatio: 1.0,
       workArea: listing.subLocationRaw ?? 'Karachi',
       updatedAt: listing.updatedAt,
     );
+  }
+
+  /// Convert backend API listing JSON to dashboard ListingRecord
+  ListingRecord _fromApiJson(Map<String, dynamic> json) {
+    final listing = listing_model.Listing.fromJson(json);
+    return _toListing(listing);
   }
 
   String _formatPrice(int price) {
@@ -81,8 +77,16 @@ class DashboardRepository {
     }
   }
 
-  /// Watch public listings with real-time updates
+  /// Watch public listings — tries backend API first, falls back to Supabase realtime,
+  /// then fixture data.
   Stream<List<ListingRecord>> watchListings() {
+    if (AppConfig.hasBackend) {
+      return Stream.fromFuture(_fetchListingsFromApi()).handleError((e) {
+        debugPrint('Backend listings error: $e');
+        return DashboardFixtures.listings;
+      });
+    }
+
     if (!AppConfig.hasSupabase) {
       return Stream.value(DashboardFixtures.listings);
     }
@@ -92,11 +96,9 @@ class DashboardRepository {
           .from('listings')
           .stream(primaryKey: ['id'])
           .map((rows) {
-            // Filter for public listings
             final publicRows = rows
                 .where((row) => (row as Map<String, dynamic>)['is_public'] as bool? ?? false)
                 .toList();
-
             return publicRows
                 .map((json) => listing_model.Listing.fromJson(json as Map<String, dynamic>))
                 .map(_toListing)
@@ -104,86 +106,137 @@ class DashboardRepository {
               ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
           })
           .handleError((e) {
-            print('Error watching listings: $e');
-            // Fallback to fixtures on error
+            debugPrint('Supabase listings error: $e');
             return DashboardFixtures.listings;
           });
     } catch (e) {
-      print('Error setting up listings stream: $e');
+      debugPrint('Error setting up listings stream: $e');
       return Stream.value(DashboardFixtures.listings);
     }
   }
 
-  /// Fetch agent listings for vault
-  Future<List<ListingRecord>> fetchAgentListings(String agentId) async {
-    if (!AppConfig.hasSupabase) {
+  Future<List<ListingRecord>> _fetchListingsFromApi() async {
+    try {
+      final raw = await _api.getListings();
+      // Backend returns { data: [...], count: N }
+      List<dynamic> items;
+      if (raw is Map && raw.containsKey('data')) {
+        items = raw['data'] as List<dynamic>;
+      } else {
+        items = raw as List<dynamic>;
+      }
+      final records = items
+          .map((e) => _fromApiJson(e as Map<String, dynamic>))
+          .toList(growable: false)
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      debugPrint('✅ Loaded ${records.length} listings from backend API');
+      return records;
+    } catch (e) {
+      debugPrint('❌ Backend fetch failed, falling back: $e');
       return DashboardFixtures.listings;
     }
+  }
+
+  /// Fetch agent's own listings for vault
+  Future<List<ListingRecord>> fetchAgentListings(String agentId) async {
+    if (AppConfig.hasBackend) {
+      try {
+        final raw = await _api.getMyListings();
+        final records = raw
+            .map((e) => _fromApiJson(e as Map<String, dynamic>))
+            .toList(growable: false)
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        debugPrint('✅ Loaded ${records.length} my listings from backend API');
+        return records;
+      } catch (e) {
+        debugPrint('❌ Backend my listings failed, falling back: $e');
+      }
+    }
+
+    if (!AppConfig.hasSupabase) return DashboardFixtures.listings;
 
     try {
       final listings = await _listingService.fetchAgentListings(agentId);
-      return listings
-          .map(_toListing)
-          .toList(growable: false)
+      return listings.map(_toListing).toList(growable: false)
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     } catch (e) {
-      print('Error fetching agent listings: $e');
+      debugPrint('Error fetching agent listings: $e');
       return DashboardFixtures.listings;
     }
   }
 
-  /// Watch block stats for demand visualization
+  /// Watch block stats — derived from listings
   Stream<List<BlockMarketStat>> watchBlockStats() {
-    if (!AppConfig.hasSupabase) {
-      return Stream.value(DashboardFixtures.blockStats);
-    }
+    return watchListings().map((listings) {
+      final blockMap = <String, List<ListingRecord>>{};
+      for (final listing in listings) {
+        blockMap.putIfAbsent(listing.blockName, () => []).add(listing);
+      }
 
-    try {
-      // Stream all listings and compute block stats
-      return watchListings().map((listings) {
-        // Group by block and calculate stats
-        final blockMap = <String, List<ListingRecord>>{};
-        for (final listing in listings) {
-          blockMap.putIfAbsent(listing.blockName, () => []).add(listing);
-        }
+      final stats = blockMap.entries.map((entry) {
+        final lst = entry.value;
+        final hotCount = lst.where((l) => l.signalTone == ListingTone.hot).length;
+        final demandRatio = lst.isNotEmpty ? ((hotCount / lst.length) + 1.0) : 1.0;
+        final coords = _resolveBlockCenter(entry.key, lst);
 
-        final stats = blockMap.entries.map((entry) {
-          final listings = entry.value;
-          final hotCount = listings.where((l) => l.signalTone == ListingTone.hot).length;
-          final demandRatio = listings.isNotEmpty ? ((hotCount / listings.length) + 1.0) : 1.0;
+        return BlockMarketStat(
+          blockName: entry.key,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          demandRatio: demandRatio,
+          supplyRatio: 1.0,
+          label: demandRatio > 2.0
+              ? 'Overheated'
+              : demandRatio > 1.5
+                  ? 'Hot Zone'
+                  : demandRatio > 1.0
+                      ? 'Demand Spike'
+                      : 'Balanced',
+        );
+      }).toList();
 
-          return BlockMarketStat(
-            blockName: entry.key,
-            latitude: listings.first.latitude,
-            longitude: listings.first.longitude,
-            demandRatio: demandRatio,
-            supplyRatio: 1.0,
-            label: demandRatio > 2.0
-                ? 'Overheated'
-                : demandRatio > 1.5
-                    ? 'Hot Zone'
-                    : demandRatio > 1.0
-                        ? 'Demand Spike'
-                        : 'Balanced',
-          );
-        }).toList();
-
-        return stats..sort((a, b) => b.demandRatio.compareTo(a.demandRatio));
-      }).handleError((e) {
-        print('Error computing block stats: $e');
-        return DashboardFixtures.blockStats;
-      });
-    } catch (e) {
-      print('Error setting up block stats stream: $e');
-      return Stream.value(DashboardFixtures.blockStats);
-    }
+      return stats..sort((a, b) => b.demandRatio.compareTo(a.demandRatio));
+    }).handleError((e) {
+      debugPrint('Error computing block stats: $e');
+      return DashboardFixtures.blockStats;
+    });
   }
 
-  /// Watch match leads (notifications)
-  Stream<List<MatchLead>> watchMatchLeads() {
-    if (!AppConfig.hasSupabase) {
-      return Stream.value(DashboardFixtures.matchLeads);
+  ({double latitude, double longitude}) _resolveBlockCenter(
+    String blockName,
+    List<ListingRecord> listings,
+  ) {
+    final listingWithCoordinates = listings.cast<ListingRecord?>().firstWhere(
+          (listing) => listing?.hasCoordinates ?? false,
+          orElse: () => null,
+        );
+
+    if (listingWithCoordinates != null) {
+      return (
+        latitude: listingWithCoordinates.latitude!,
+        longitude: listingWithCoordinates.longitude!,
+      );
     }
+
+    final lower = blockName.toLowerCase();
+    if (lower.contains('nazimabad')) return (latitude: 24.93, longitude: 67.04);
+    if (lower.contains('pechs')) return (latitude: 24.87, longitude: 67.05);
+    if (lower.contains('gulshan')) return (latitude: 24.91, longitude: 67.10);
+    if (lower.contains('scheme 33')) return (latitude: 24.95, longitude: 67.12);
+
+    return (latitude: 24.86, longitude: 67.03);
+  }
+
+  /// Watch match leads — tries backend, falls back to Supabase, then fixtures
+  Stream<List<MatchLead>> watchMatchLeads() {
+    if (AppConfig.hasBackend) {
+      return Stream.fromFuture(_fetchNotificationsFromApi()).handleError((e) {
+        debugPrint('Backend notifications error: $e');
+        return DashboardFixtures.matchLeads;
+      });
+    }
+
+    if (!AppConfig.hasSupabase) return Stream.value(DashboardFixtures.matchLeads);
 
     try {
       return Supabase.instance.client
@@ -196,20 +249,52 @@ class DashboardRepository {
               ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
           })
           .handleError((e) {
-            print('Error watching match leads: $e');
+            debugPrint('Supabase notifications error: $e');
             return DashboardFixtures.matchLeads;
           });
     } catch (e) {
-      print('Error setting up match leads stream: $e');
+      debugPrint('Error setting up match leads stream: $e');
       return Stream.value(DashboardFixtures.matchLeads);
     }
   }
 
-  /// Fetch leaderboard from top agents
-  Future<List<LeaderboardEntry>> fetchLeaderboard() async {
-    if (!AppConfig.hasSupabase) {
-      return DashboardFixtures.leaderboard;
+  Future<List<MatchLead>> _fetchNotificationsFromApi() async {
+    try {
+      final raw = await _api.getNotifications();
+      final leads = raw
+          .map((e) => MatchLead.fromJson(e as Map<String, dynamic>))
+          .toList(growable: false)
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      debugPrint('✅ Loaded ${leads.length} notifications from backend API');
+      return leads;
+    } catch (e) {
+      debugPrint('❌ Backend notifications failed, falling back: $e');
+      return DashboardFixtures.matchLeads;
     }
+  }
+
+  /// Fetch leaderboard — tries backend, falls back to Supabase, then fixtures
+  Future<List<LeaderboardEntry>> fetchLeaderboard() async {
+    if (AppConfig.hasBackend) {
+      try {
+        final raw = await _api.getLeaderboard();
+        final entries = raw.asMap().entries.map((e) {
+          final json = e.value as Map<String, dynamic>;
+          return LeaderboardEntry(
+            rank: (json['rank'] as int?) ?? (e.key + 1),
+            name: (json['name'] ?? 'Agent') as String,
+            agency: (json['agency_name'] ?? 'Raabta') as String,
+            volumeLabel: '${json['public_listings_count'] ?? 0} Active',
+          );
+        }).toList();
+        debugPrint('✅ Loaded ${entries.length} leaderboard entries from backend API');
+        return entries;
+      } catch (e) {
+        debugPrint('❌ Backend leaderboard failed, falling back: $e');
+      }
+    }
+
+    if (!AppConfig.hasSupabase) return DashboardFixtures.leaderboard;
 
     try {
       final agents = await _agentService.fetchTopAgents(limit: 10);
@@ -222,17 +307,12 @@ class DashboardRepository {
         );
       }).toList();
     } catch (e) {
-      print('Error fetching leaderboard: $e');
+      debugPrint('Error fetching leaderboard: $e');
       return DashboardFixtures.leaderboard;
     }
   }
 
-  /// Get leaderboard synchronously (for initialization)
   List<LeaderboardEntry> getLeaderboard() => DashboardFixtures.leaderboard;
-
-  /// Get market premiums (static data for now)
   List<MarketPremium> getPremiums() => DashboardFixtures.premiums;
-
-  /// Get work areas (would fetch from agents in production)
   List<String> getWorkAreas() => DashboardFixtures.workAreas;
 }

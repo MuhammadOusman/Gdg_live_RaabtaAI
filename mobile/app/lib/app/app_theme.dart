@@ -93,14 +93,14 @@ class RaabtaTheme {
           TextStyle(
             color: Colors.white.withValues(alpha: 0.8),
             fontWeight: FontWeight.w600,
-            fontSize: 11,
+            fontSize: 10,
           ),
         ),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
             color: selected ? electricBlue : Colors.white60,
-            size: 22,
+            size: 20,
           );
         }),
       ),

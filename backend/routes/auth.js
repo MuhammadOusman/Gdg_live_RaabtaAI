@@ -6,6 +6,10 @@ const router = express.Router();
 
 router.post('/login', async (req, res) => {
     try {
+        if (!process.env.JWT_SECRET) {
+            return res.status(500).json({ error: 'JWT_SECRET is not configured on the backend' });
+        }
+
         const { phone_number, name } = req.body;
         if (!phone_number) return res.status(400).json({ error: 'phone_number required' });
 

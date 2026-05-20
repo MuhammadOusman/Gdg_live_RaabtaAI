@@ -5,6 +5,10 @@ import 'dotenv/config';
 const JWT_SECRET = process.env.JWT_SECRET;
 
 export function requireAuth(req, res, next) {
+    if (!JWT_SECRET) {
+        return res.status(500).json({ error: 'JWT_SECRET is not configured on the backend' });
+    }
+
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Missing or invalid Authorization header' });

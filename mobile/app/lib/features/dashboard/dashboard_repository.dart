@@ -97,10 +97,10 @@ class DashboardRepository {
           .stream(primaryKey: ['id'])
           .map((rows) {
             final publicRows = rows
-                .where((row) => (row as Map<String, dynamic>)['is_public'] as bool? ?? false)
+            .where((Map<String, dynamic> row) => row['is_public'] as bool? ?? false)
                 .toList();
             return publicRows
-                .map((json) => listing_model.Listing.fromJson(json as Map<String, dynamic>))
+            .map((Map<String, dynamic> json) => listing_model.Listing.fromJson(json))
                 .map(_toListing)
                 .toList(growable: false)
               ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
@@ -117,7 +117,7 @@ class DashboardRepository {
 
   Future<List<ListingRecord>> _fetchListingsFromApi() async {
     try {
-      final raw = await _api.getListings();
+      final dynamic raw = await _api.getListings();
       // Backend returns { data: [...], count: N }
       List<dynamic> items;
       if (raw is Map && raw.containsKey('data')) {

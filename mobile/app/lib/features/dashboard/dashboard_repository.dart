@@ -384,4 +384,180 @@ class DashboardRepository {
   List<LeaderboardEntry> getLeaderboard() => DashboardFixtures.leaderboard;
   List<MarketPremium> getPremiums() => DashboardFixtures.premiums;
   List<String> getWorkAreas() => DashboardFixtures.workAreas;
+
+  Future<List<RecommendationEntry>> fetchRecommendations({
+    int limit = 20,
+  }) async {
+    if (!AppConfig.hasBackend) return [];
+    try {
+      final raw = await _api.getRecommendations(limit: limit);
+      return raw
+          .map((e) => RecommendationEntry.fromJson(e as Map<String, dynamic>))
+          .toList(growable: false)
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    } catch (e) {
+      debugPrint('Error loading recommendations: $e');
+      return [];
+    }
+  }
+
+  Future<List<RecommendationEntry>> runAndFetchRecommendations() async {
+    if (!AppConfig.hasBackend) return [];
+    try {
+      await _api.runRecommendations();
+    } catch (e) {
+      debugPrint('Error running recommendations: $e');
+    }
+    return fetchRecommendations(limit: 20);
+  }
+
+  Future<Map<String, dynamic>> fetchIntelBundle() async {
+    if (!AppConfig.hasBackend) {
+      return {
+        'dashboard': <String, dynamic>{},
+        'demandVsSupply': <dynamic>[],
+        'priceStats': <dynamic>[],
+        'velocity': <dynamic>[],
+        'cornerPremium': <dynamic>[],
+      };
+    }
+
+    try {
+      final results = await Future.wait<dynamic>([
+        _api.getDashboardStats(),
+        _api.getDemandVsSupply(),
+        _api.getPriceStats(),
+        _api.getVelocity(days: 30),
+        _api.getCornerPremium(),
+      ]);
+      return {
+        'dashboard': results[0] as Map<String, dynamic>,
+        'demandVsSupply': results[1] as List<dynamic>,
+        'priceStats': results[2] as List<dynamic>,
+        'velocity': results[3] as List<dynamic>,
+        'cornerPremium': results[4] as List<dynamic>,
+      };
+    } catch (e) {
+      debugPrint('Error loading intel bundle: $e');
+      return _buildIntelFallbackFromListings();
+    }
+  }
+
+  Future<Map<String, dynamic>> _buildIntelFallbackFromListings() async {
+    try {
+      final raw = await _api.getMapListings();
+      final items = raw
+          .whereType<Map<String, dynamic>>()
+          .toList(growable: false);
+
+      final active = items
+          .where((l) => (l['status'] ?? 'active') == 'active')
+          .toList(growable: false);
+
+      final hotCount = active
+          .where((l) => (l['is_hot_property'] ?? false) == true)
+          .length;
+
+      final supplyMap = <String, int>{};
+      for (final l in active) {
+        final block = (l['block_id'] ?? 'Unknown').toString();
+        supplyMap[block] = (supplyMap[block] ?? 0) + 1;
+      }
+
+      final demandVsSupply = supplyMap.entries
+          .map(
+            (e) => <String, dynamic>{
+              'block_id': e.key,
+              'supply': e.value,
+              'demand': 0,
+              'demand_supply_ratio': 0.0,
+            },
+          )
+          .toList(growable: false)
+        ..sort((a, b) => (b['supply'] as int).compareTo(a['supply'] as int));
+
+      final groupedPrices = <String, List<int>>{};
+      for (final l in active) {
+        final block = (l['block_id'] ?? 'Unknown').toString();
+        final unit = (l['unit'] ?? '').toString();
+        final price = l['demand_price'];
+        if (price is! num) continue;
+        final key = '${block}__$unit';
+        groupedPrices.putIfAbsent(key, () => []).add(price.toInt());
+      }
+
+      final priceStats = groupedPrices.entries.map((entry) {
+        final prices = entry.value..sort();
+        final n = prices.length;
+        final avg = prices.reduce((a, b) => a + b) ~/ n;
+        final median = n.isOdd
+            ? prices[n ~/ 2]
+            : ((prices[n ~/ 2 - 1] + prices[n ~/ 2]) ~/ 2);
+        final split = entry.key.split('__');
+        return <String, dynamic>{
+          'block_id': split.first,
+          'unit': split.length > 1 ? split[1] : '',
+          'count': n,
+          'min_price': prices.first,
+          'max_price': prices.last,
+          'avg_price': avg,
+          'median_price': median,
+        };
+      }).toList(growable: false);
+
+      final cornerByBlock = <String, ({List<int> corner, List<int> nonCorner})>{};
+      for (final l in active) {
+        final block = (l['block_id'] ?? 'Unknown').toString();
+        final price = l['demand_price'];
+        if (price is! num) continue;
+        final features = (l['features'] as List<dynamic>? ?? const [])
+            .map((f) => f.toString().toLowerCase())
+            .toSet();
+        final rec = cornerByBlock[block] ?? (corner: <int>[], nonCorner: <int>[]);
+        if (features.contains('corner')) {
+          rec.corner.add(price.toInt());
+        } else {
+          rec.nonCorner.add(price.toInt());
+        }
+        cornerByBlock[block] = rec;
+      }
+
+      final cornerPremium = cornerByBlock.entries.map((e) {
+        int? avg(List<int> arr) => arr.isEmpty ? null : (arr.reduce((a, b) => a + b) ~/ arr.length);
+        final cAvg = avg(e.value.corner);
+        final nAvg = avg(e.value.nonCorner);
+        final pct = (cAvg != null && nAvg != null && nAvg > 0)
+            ? (((cAvg - nAvg) / nAvg) * 100)
+            : null;
+        return <String, dynamic>{
+          'block_id': e.key,
+          'corner_avg_price': cAvg,
+          'non_corner_avg_price': nAvg,
+          'corner_premium_pct': pct != null ? double.parse(pct.toStringAsFixed(1)) : null,
+          'corner_count': e.value.corner.length,
+          'non_corner_count': e.value.nonCorner.length,
+        };
+      }).toList(growable: false);
+
+      return {
+        'dashboard': <String, dynamic>{
+          'hot_properties_count': hotCount,
+          'avg_velocity_days': null,
+        },
+        'demandVsSupply': demandVsSupply,
+        'priceStats': priceStats,
+        'velocity': <dynamic>[],
+        'cornerPremium': cornerPremium,
+      };
+    } catch (e) {
+      debugPrint('Intel fallback build failed: $e');
+      return {
+        'dashboard': <String, dynamic>{},
+        'demandVsSupply': <dynamic>[],
+        'priceStats': <dynamic>[],
+        'velocity': <dynamic>[],
+        'cornerPremium': <dynamic>[],
+      };
+    }
+  }
 }

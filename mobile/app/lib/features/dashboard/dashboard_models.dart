@@ -229,6 +229,32 @@ class MarketPremium {
   final String premiumLabel;
 }
 
+@immutable
+class RecommendationEntry {
+  const RecommendationEntry({
+    required this.id,
+    required this.message,
+    required this.createdAt,
+    required this.isRead,
+  });
+
+  final String id;
+  final String message;
+  final DateTime createdAt;
+  final bool isRead;
+
+  factory RecommendationEntry.fromJson(Map<String, dynamic> json) {
+    return RecommendationEntry(
+      id: '${json['id'] ?? ''}',
+      message: (json['message'] ?? '') as String,
+      createdAt:
+          DateTime.tryParse('${json['created_at'] ?? json['createdAt']}') ??
+          DateTime.now(),
+      isRead: (json['is_read'] ?? false) as bool,
+    );
+  }
+}
+
 enum ListingTone { standard, newListing, hot }
 
 enum ListingVisibility { private, public }

@@ -15,6 +15,7 @@ class ApiService {
   Map<String, dynamic>? get currentAgent => _currentAgent;
 
   bool get isAuthenticated => _token != null;
+  bool _allowUnauth = false;
 
   Future<void> login(String phone, String name) async {
     final url = Uri.parse('${AppConfig.backendUrl}/api/auth/login');
@@ -38,6 +39,7 @@ class ApiService {
   }
 
   Future<void> ensureAuthenticated() async {
+    if (_allowUnauth) return;
     if (_token != null) return;
 
     // Use the configured legacy agent if a route needs auth before the sign-in screen runs.
@@ -47,10 +49,11 @@ class ApiService {
         return;
       } catch (e) {
         debugPrint('Legacy login failed: $e');
+        _allowUnauth = true;
+        return;
       }
     }
-
-    throw Exception('Not authenticated. Please log in.');
+    _allowUnauth = true;
   }
 
   Future<Map<String, dynamic>> sendMessage(
@@ -117,7 +120,7 @@ class ApiService {
 
   Map<String, String> _headers() {
     final headers = {'Content-Type': 'application/json'};
-    if (_token != null) {
+    if (_token != null && !_allowUnauth) {
       headers['Authorization'] = 'Bearer $_token';
     }
     return headers;
@@ -283,5 +286,97 @@ class ApiService {
       return jsonDecode(response.body) as List<dynamic>;
     }
     throw Exception('Failed to load leaderboard: ${response.statusCode}');
+  }
+
+  Future<List<dynamic>> getRecommendations({int limit = 20}) async {
+    await ensureAuthenticated();
+    final agent = Uri.encodeQueryComponent(_resolveSenderAgentId());
+    final url = Uri.parse(
+      '${AppConfig.backendUrl}/api/analytics/recommendations?limit=$limit&agent_id=$agent',
+    );
+    final response = await http.get(url, headers: _headers());
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as List<dynamic>;
+    }
+    throw Exception('Failed to load recommendations: ${response.statusCode}');
+  }
+
+  Future<List<dynamic>> runRecommendations() async {
+    await ensureAuthenticated();
+    final agent = Uri.encodeQueryComponent(_resolveSenderAgentId());
+    final url = Uri.parse(
+      '${AppConfig.backendUrl}/api/recommender/run?agent_id=$agent',
+    );
+    final response = await http.get(url, headers: _headers());
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final recs = decoded['recommendations'];
+      if (recs is List<dynamic>) {
+        return recs;
+      }
+      return [];
+    }
+    throw Exception('Failed to run recommendations: ${response.statusCode}');
+  }
+
+  Future<List<dynamic>> getDemandVsSupply({String? blockId}) async {
+    await ensureAuthenticated();
+    final query = blockId != null && blockId.isNotEmpty
+        ? '?block_id=$blockId'
+        : '';
+    final url = Uri.parse(
+      '${AppConfig.backendUrl}/api/analytics/demand-vs-supply$query',
+    );
+    final response = await http.get(url, headers: _headers());
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as List<dynamic>;
+    }
+    throw Exception('Failed to load demand vs supply: ${response.statusCode}');
+  }
+
+  Future<List<dynamic>> getPriceStats({String? blockId, String? unit}) async {
+    await ensureAuthenticated();
+    final params = <String>[];
+    if (blockId != null && blockId.isNotEmpty) params.add('block_id=$blockId');
+    if (unit != null && unit.isNotEmpty) params.add('unit=$unit');
+    final query = params.isEmpty ? '' : '?${params.join('&')}';
+    final url = Uri.parse(
+      '${AppConfig.backendUrl}/api/analytics/price-stats$query',
+    );
+    final response = await http.get(url, headers: _headers());
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as List<dynamic>;
+    }
+    throw Exception('Failed to load price stats: ${response.statusCode}');
+  }
+
+  Future<List<dynamic>> getVelocity({String? blockId, int days = 30}) async {
+    await ensureAuthenticated();
+    final params = <String>['days=$days'];
+    if (blockId != null && blockId.isNotEmpty) params.add('block_id=$blockId');
+    final query = '?${params.join('&')}';
+    final url = Uri.parse(
+      '${AppConfig.backendUrl}/api/analytics/velocity$query',
+    );
+    final response = await http.get(url, headers: _headers());
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as List<dynamic>;
+    }
+    throw Exception('Failed to load velocity: ${response.statusCode}');
+  }
+
+  Future<List<dynamic>> getCornerPremium({String? blockId}) async {
+    await ensureAuthenticated();
+    final query = blockId != null && blockId.isNotEmpty
+        ? '?block_id=$blockId'
+        : '';
+    final url = Uri.parse(
+      '${AppConfig.backendUrl}/api/analytics/corner-premium$query',
+    );
+    final response = await http.get(url, headers: _headers());
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as List<dynamic>;
+    }
+    throw Exception('Failed to load corner premium: ${response.statusCode}');
   }
 }

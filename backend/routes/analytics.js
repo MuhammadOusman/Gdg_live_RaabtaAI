@@ -1,5 +1,7 @@
 import express from 'express';
 import supabase from '../services/supabaseClient.js';
+import { requireAuth } from '../middleware/auth.js';
+import { generateRecommendations } from '../../agents/agents/recommender/index.js';
 
 const router = express.Router();
 
@@ -227,6 +229,36 @@ router.get('/leaderboard', async (req, res) => {
     if (error) return res.status(400).json({ error: error.message });
 
     return res.json(data.map((agent, idx) => ({ rank: idx + 1, ...agent })));
+});
+
+// GET /api/analytics/recommendations
+router.get('/recommendations', requireAuth, async (req, res) => {
+    const { limit = 20 } = req.query;
+
+    const { data, error } = await supabase
+        .from('notifications')
+        .select('id, agent_id, type, message, is_read, created_at')
+        .eq('agent_id', req.agentId)
+        .eq('type', 'recommendation')
+        .order('created_at', { ascending: false })
+        .limit(Number(limit));
+
+    if (error) return res.status(400).json({ error: error.message });
+    return res.json(data || []);
+});
+
+// POST /api/analytics/recommendations/run
+router.post('/recommendations/run', requireAuth, async (req, res) => {
+    try {
+        const result = await generateRecommendations(req.agentId);
+        return res.json({
+            status: 'success',
+            agent_id: req.agentId,
+            recommendations: result?.recommendations || [],
+        });
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
 });
 
 // Helper functions

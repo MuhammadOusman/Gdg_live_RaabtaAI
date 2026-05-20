@@ -22,6 +22,15 @@ class DashboardController extends ChangeNotifier {
   final List<BlockMarketStat> _blockStats = [];
   final List<MatchLead> _matchLeads = [];
   final List<LeaderboardEntry> _leaderboard = [];
+  final List<RecommendationEntry> _recommendations = [];
+  final List<Map<String, dynamic>> _demandVsSupply = [];
+  final List<Map<String, dynamic>> _priceStats = [];
+  final List<Map<String, dynamic>> _velocity = [];
+  final List<Map<String, dynamic>> _cornerPremium = [];
+  bool _intelLoading = false;
+  String? _intelError;
+  int _intelHotPropertiesCount = 0;
+  int? _intelAvgVelocityDays;
   final List<Request> _requests = [];
   final Set<String> _selectedWorkAreas = <String>{};
   final Set<String> _archivedListingIds = <String>{};
@@ -46,6 +55,18 @@ class DashboardController extends ChangeNotifier {
   Set<String> get selectedWorkAreas => Set.unmodifiable(_selectedWorkAreas);
   List<LeaderboardEntry> get leaderboard => List.unmodifiable(_leaderboard);
   List<MarketPremium> get premiums => _repository.getPremiums();
+  List<RecommendationEntry> get recommendations =>
+      List.unmodifiable(_recommendations);
+  List<Map<String, dynamic>> get demandVsSupply =>
+      List.unmodifiable(_demandVsSupply);
+  List<Map<String, dynamic>> get priceStats => List.unmodifiable(_priceStats);
+  List<Map<String, dynamic>> get velocity => List.unmodifiable(_velocity);
+  List<Map<String, dynamic>> get cornerPremium =>
+      List.unmodifiable(_cornerPremium);
+  bool get intelLoading => _intelLoading;
+  String? get intelError => _intelError;
+  int get intelHotPropertiesCount => _intelHotPropertiesCount;
+  int? get intelAvgVelocityDays => _intelAvgVelocityDays;
 
   /// All active listings filtered by work area
   List<ListingRecord> get listings {
@@ -202,6 +223,63 @@ class DashboardController extends ChangeNotifier {
     }
   }
 
+  Future<void> fetchRecommendations({bool runAgent = false}) async {
+    try {
+      final data = runAgent
+          ? await _repository.runAndFetchRecommendations()
+          : await _repository.fetchRecommendations();
+      _recommendations
+        ..clear()
+        ..addAll(data);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading recommendations: $e');
+    }
+  }
+
+  Future<void> fetchIntelAnalytics() async {
+    _intelLoading = true;
+    _intelError = null;
+    notifyListeners();
+    try {
+      final bundle = await _repository.fetchIntelBundle();
+      final dashboard = bundle['dashboard'] as Map<String, dynamic>;
+      _intelHotPropertiesCount =
+          (dashboard['hot_properties_count'] ?? 0) as int;
+      _intelAvgVelocityDays = dashboard['avg_velocity_days'] as int?;
+
+      _demandVsSupply
+        ..clear()
+        ..addAll(
+          ((bundle['demandVsSupply'] ?? <dynamic>[]) as List<dynamic>)
+              .whereType<Map<String, dynamic>>(),
+        );
+      _priceStats
+        ..clear()
+        ..addAll(
+          ((bundle['priceStats'] ?? <dynamic>[]) as List<dynamic>)
+              .whereType<Map<String, dynamic>>(),
+        );
+      _velocity
+        ..clear()
+        ..addAll(
+          ((bundle['velocity'] ?? <dynamic>[]) as List<dynamic>)
+              .whereType<Map<String, dynamic>>(),
+        );
+      _cornerPremium
+        ..clear()
+        ..addAll(
+          ((bundle['cornerPremium'] ?? <dynamic>[]) as List<dynamic>)
+              .whereType<Map<String, dynamic>>(),
+        );
+    } catch (e) {
+      _intelError = e.toString();
+    } finally {
+      _intelLoading = false;
+      notifyListeners();
+    }
+  }
+
   void _bindStreams() {
     _listingsSub = _repository.watchListings().listen((data) {
       _remoteListings
@@ -235,8 +313,10 @@ class DashboardController extends ChangeNotifier {
   void setTabIndex(int value) {
     _tabIndex = value;
     if (value == 1) {
-      // Vault tab selected — fetch my listings
       fetchMyListings();
+    } else if (value == 3) {
+      fetchRecommendations();
+      fetchIntelAnalytics();
     }
     notifyListeners();
   }

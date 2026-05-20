@@ -378,17 +378,15 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
           final matchesFilter = controller.selectedWorkAreas.isEmpty ||
               controller.selectedWorkAreas.contains(listing.workArea);
 
-          // Style markers of selected work areas with colorful hues, and others with a grey/slate hue
+          // Style markers based on hot/new status as per prompt
           double markerHue = 200.0; // Slate-grey for greyed out areas
           if (matchesFilter) {
-            if (listing.demandRatio >= 2.0) {
-              markerHue = BitmapDescriptor.hueRed;
-            } else if (listing.blockName.contains('H') || listing.blockName.contains('15')) {
-              markerHue = BitmapDescriptor.hueGreen;
-            } else if (listing.blockName.contains('N')) {
-              markerHue = BitmapDescriptor.hueYellow;
+            if (listing.signalTone == ListingTone.hot) {
+              markerHue = BitmapDescriptor.hueRed; // 🔥 Hot Property
+            } else if (listing.signalTone == ListingTone.newListing) {
+              markerHue = BitmapDescriptor.hueGreen; // ✨ New Listing
             } else {
-              markerHue = BitmapDescriptor.hueAzure;
+              markerHue = BitmapDescriptor.hueAzure; // Standard
             }
           }
 

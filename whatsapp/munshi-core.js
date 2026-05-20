@@ -180,11 +180,17 @@ function createWhatsAppApi(options = {}) {
 }
 
 if (require.main === module) {
-  require('dotenv').config({ path: '../agents/.env' });
+  if (fs.existsSync(path.join(__dirname, '.env'))) {
+    require('dotenv').config({ path: path.join(__dirname, '.env') });
+  } else {
+    require('dotenv').config({ path: '../agents/.env' });
+  }
+  const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
   const axios = require('axios');
   const api = createWhatsAppApi();
 
   console.log('🚀 Starting WhatsApp API (Restoring original state)...');
+  console.log(`📡 Connecting to Agents Backend at: ${BACKEND_URL}`);
 
   // In-memory state machine to track users waiting for confirmation
   const pendingConfirms = new Map();
@@ -209,7 +215,7 @@ if (require.main === module) {
         // Override is_public based on their specific confirmation choice
         pendingData.parsed.is_public = isPublicConfirm;
 
-        const response = await axios.post('http://localhost:3000/api/confirm', {
+        const response = await axios.post(`${BACKEND_URL}/api/confirm`, {
           parsed_data: pendingData.parsed,
           sender_agent_id: payload.from,
           session_id: pendingData.session_id
@@ -235,7 +241,7 @@ if (require.main === module) {
 
       console.log(`[🤖 Bot Sync] Forwarding message to backend from ${payload.from}...`);
       
-      const response = await axios.post('http://localhost:3000/api/message', {
+      const response = await axios.post(`${BACKEND_URL}/api/message`, {
         raw_text: payload.text,
         sender_agent_id: payload.from,
         source: 'whatsapp'

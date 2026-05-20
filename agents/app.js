@@ -5,9 +5,7 @@ import { handleMessage, confirmAndSave } from './orchestrator/index.js';
 import './agents/janitor/cron.js';
 
 const app = express();
-app.use(cors({
-    origin: 'http://localhost:5173'
-}))
+app.use(cors());
 app.use(express.json());
 
 app.get('/health', (req, res) => {
@@ -93,3 +91,5 @@ app.listen(PORT, () => {
     console.log(`\n🚀 Raabta AI — port ${PORT}`);
     console.log(`📡 http://localhost:${PORT}/health\n`);
 });
+
+export default app;

@@ -8,10 +8,8 @@ import 'dashboard_repository.dart';
 
 class DashboardController extends ChangeNotifier {
   DashboardController(this._repository) {
-    // Seed with fixtures immediately so the UI is never empty
-    _remoteListings.addAll(DashboardFixtures.listings);
-    _blockStats.addAll(DashboardFixtures.blockStats);
-    _matchLeads.addAll(DashboardFixtures.matchLeads);
+    // Keep listings/map data source-of-truth from live endpoints only.
+    // Leaderboard can still show fixtures until API resolves.
     _leaderboard.addAll(DashboardFixtures.leaderboard);
 
     _bindStreams();
@@ -27,7 +25,8 @@ class DashboardController extends ChangeNotifier {
   final List<Request> _requests = [];
   final Set<String> _selectedWorkAreas = <String>{};
   final Set<String> _archivedListingIds = <String>{};
-  final Map<String, ListingVisibility> _visibilityOverrides = <String, ListingVisibility>{};
+  final Map<String, ListingVisibility> _visibilityOverrides =
+      <String, ListingVisibility>{};
 
   StreamSubscription<List<ListingRecord>>? _listingsSub;
   StreamSubscription<List<BlockMarketStat>>? _statsSub;
@@ -50,20 +49,26 @@ class DashboardController extends ChangeNotifier {
 
   /// All active listings filtered by work area
   List<ListingRecord> get listings {
-    final visible = _remoteListings.map((listing) {
-      final mergedVisibility = _visibilityOverrides[listing.id] ?? listing.visibility;
-      final mergedStatus = _archivedListingIds.contains(listing.id)
-          ? ListingStatus.archived
-          : listing.status;
+    final visible = _remoteListings
+        .map((listing) {
+          final mergedVisibility =
+              _visibilityOverrides[listing.id] ?? listing.visibility;
+          final mergedStatus = _archivedListingIds.contains(listing.id)
+              ? ListingStatus.archived
+              : listing.status;
 
-      return listing.copyWith(
-        visibility: mergedVisibility,
-        status: mergedStatus,
-      );
-    }).where((listing) {
-      final matchesArea = _selectedWorkAreas.isEmpty || _selectedWorkAreas.contains(listing.workArea);
-      return matchesArea && listing.status == ListingStatus.active;
-    }).toList(growable: false);
+          return listing.copyWith(
+            visibility: mergedVisibility,
+            status: mergedStatus,
+          );
+        })
+        .where((listing) {
+          final matchesArea =
+              _selectedWorkAreas.isEmpty ||
+              _selectedWorkAreas.contains(listing.workArea);
+          return matchesArea && listing.status == ListingStatus.active;
+        })
+        .toList(growable: false);
 
     visible.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return visible;
@@ -71,27 +76,31 @@ class DashboardController extends ChangeNotifier {
 
   /// All active listings unfiltered by work area for map visualization
   List<ListingRecord> get unfilteredListings {
-    final visible = _remoteListings.map((listing) {
-      final mergedVisibility = _visibilityOverrides[listing.id] ?? listing.visibility;
-      final mergedStatus = _archivedListingIds.contains(listing.id)
-          ? ListingStatus.archived
-          : listing.status;
+    final visible = _remoteListings
+        .map((listing) {
+          final mergedVisibility =
+              _visibilityOverrides[listing.id] ?? listing.visibility;
+          final mergedStatus = _archivedListingIds.contains(listing.id)
+              ? ListingStatus.archived
+              : listing.status;
 
-      return listing.copyWith(
-        visibility: mergedVisibility,
-        status: mergedStatus,
-      );
-    }).where((listing) {
-      return listing.status == ListingStatus.active;
-    }).toList(growable: false);
+          return listing.copyWith(
+            visibility: mergedVisibility,
+            status: mergedStatus,
+          );
+        })
+        .where((listing) {
+          return listing.status == ListingStatus.active;
+        })
+        .toList(growable: false);
 
     visible.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return visible;
   }
 
-  List<BlockMarketStat> get unfilteredBlockStats => _blockStats
-      .toList(growable: false)
-    ..sort((a, b) => b.demandRatio.compareTo(a.demandRatio));
+  List<BlockMarketStat> get unfilteredBlockStats =>
+      _blockStats.toList(growable: false)
+        ..sort((a, b) => b.demandRatio.compareTo(a.demandRatio));
 
   /// My own listings — fetched from /api/listings/my
   List<ListingRecord> get myListings => List.unmodifiable(_myListings);
@@ -99,27 +108,42 @@ class DashboardController extends ChangeNotifier {
   /// Vault listings — all active listings (private or public) for the agent
   List<ListingRecord> get vaultListings {
     // Show ALL listings regardless of work area filter for the vault
-    final all = _myListings.map((listing) {
-      final mergedVisibility = _visibilityOverrides[listing.id] ?? listing.visibility;
-      final mergedStatus = _archivedListingIds.contains(listing.id)
-          ? ListingStatus.archived
-          : listing.status;
-      return listing.copyWith(visibility: mergedVisibility, status: mergedStatus);
-    }).where((listing) {
-      return listing.status == ListingStatus.active && listing.visibility == _vaultFilter;
-    }).toList(growable: false);
+    final all = _myListings
+        .map((listing) {
+          final mergedVisibility =
+              _visibilityOverrides[listing.id] ?? listing.visibility;
+          final mergedStatus = _archivedListingIds.contains(listing.id)
+              ? ListingStatus.archived
+              : listing.status;
+          return listing.copyWith(
+            visibility: mergedVisibility,
+            status: mergedStatus,
+          );
+        })
+        .where((listing) {
+          return listing.status == ListingStatus.active &&
+              listing.visibility == _vaultFilter;
+        })
+        .toList(growable: false);
 
     all.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return all;
   }
 
-  List<BlockMarketStat> get blockStats => _blockStats
-      .where((stat) => _selectedWorkAreas.isEmpty || _selectedWorkAreas.contains(stat.blockName) || _selectedWorkAreas.contains(_inferArea(stat.blockName)))
-      .toList(growable: false)
-    ..sort((a, b) => b.demandRatio.compareTo(a.demandRatio));
+  List<BlockMarketStat> get blockStats =>
+      _blockStats
+          .where(
+            (stat) =>
+                _selectedWorkAreas.isEmpty ||
+                _selectedWorkAreas.contains(stat.blockName) ||
+                _selectedWorkAreas.contains(_inferArea(stat.blockName)),
+          )
+          .toList(growable: false)
+        ..sort((a, b) => b.demandRatio.compareTo(a.demandRatio));
 
   List<MatchLead> get matchLeads => _matchLeads;
-  List<Request> get requests => _requests.where((r) => r.status == 'searching').toList(growable: false);
+  List<Request> get requests =>
+      _requests.where((r) => r.status == 'searching').toList(growable: false);
 
   /// Fetch the current agent's own listings
   Future<void> fetchMyListings() async {
@@ -264,14 +288,20 @@ class DashboardController extends ChangeNotifier {
       if (listingIndex == -1) return;
     }
 
-    final listing = _myListings.isNotEmpty && _myListings.any((l) => l.id == listingId)
+    final listing =
+        _myListings.isNotEmpty && _myListings.any((l) => l.id == listingId)
         ? _myListings[listingIndex]
         : _remoteListings[listingIndex];
-    final next = (_visibilityOverrides[listing.id] ?? listing.visibility) == ListingVisibility.private
+    final next =
+        (_visibilityOverrides[listing.id] ?? listing.visibility) ==
+            ListingVisibility.private
         ? ListingVisibility.public
         : ListingVisibility.private;
     _visibilityOverrides[listing.id] = next;
-    _repository.toggleListingVisibility(listingId, next == ListingVisibility.public);
+    _repository.toggleListingVisibility(
+      listingId,
+      next == ListingVisibility.public,
+    );
     showToast('🔄 Switched to ${next.name.toUpperCase()}.');
     fetchMyListings();
     notifyListeners();

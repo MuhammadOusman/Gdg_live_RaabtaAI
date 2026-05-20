@@ -25,25 +25,33 @@ class DashboardRepository {
     if (listing.isHotProperty) {
       tone = ListingTone.hot;
     } else {
-      final daysSinceCreation = DateTime.now().difference(listing.createdAt).inDays;
+      final daysSinceCreation = DateTime.now()
+          .difference(listing.createdAt)
+          .inDays;
       if (daysSinceCreation <= 7) {
         tone = ListingTone.newListing;
       }
     }
 
-    final visibility = listing.isPublic ? ListingVisibility.public : ListingVisibility.private;
+    final visibility = listing.isPublic
+        ? ListingVisibility.public
+        : ListingVisibility.private;
     final status = listing.status == 'archived' || listing.status == 'sold'
         ? ListingStatus.archived
         : ListingStatus.active;
 
-    final priceLabel = listing.demandPrice != null ? _formatPrice(listing.demandPrice!) : '—';
-    final sizeLabel = listing.size != null ? '${listing.size} ${listing.unit}' : '—';
+    final priceLabel = listing.demandPrice != null
+        ? _formatPrice(listing.demandPrice!)
+        : '—';
+    final sizeLabel = listing.size != null
+        ? '${listing.size} ${listing.unit}'
+        : '—';
     final firstNote = listing.notes.isNotEmpty ? '${listing.notes.first}' : '';
     final notesSnippet = firstNote.length > 60
         ? '${firstNote.substring(0, 60)}...'
         : firstNote.isNotEmpty
-            ? firstNote
-            : 'No notes';
+        ? firstNote
+        : 'No notes';
 
     return ListingRecord(
       id: listing.id,
@@ -53,8 +61,12 @@ class DashboardRepository {
       notesSnippet: notesSnippet,
       sublocation: listing.subLocationRaw ?? '',
       notes: listing.notes.isNotEmpty ? listing.notes.join(' \u2014 ') : '',
-      latitude: listing.latitude != null && listing.latitude != 0.0 ? listing.latitude! : null,
-      longitude: listing.longitude != null && listing.longitude != 0.0 ? listing.longitude! : null,
+      latitude: listing.latitude != null && listing.latitude != 0.0
+          ? listing.latitude!
+          : null,
+      longitude: listing.longitude != null && listing.longitude != 0.0
+          ? listing.longitude!
+          : null,
       signalTone: tone,
       visibility: visibility,
       status: status,
@@ -81,17 +93,17 @@ class DashboardRepository {
   }
 
   /// Watch public listings — tries backend API first, falls back to Supabase realtime,
-  /// then fixture data.
+  /// then an empty result.
   Stream<List<ListingRecord>> watchListings() {
     if (AppConfig.hasBackend) {
       return Stream.fromFuture(_fetchListingsFromApi()).handleError((e) {
         debugPrint('Backend listings error: $e');
-        return DashboardFixtures.listings;
+        return <ListingRecord>[];
       });
     }
 
     if (!AppConfig.hasSupabase) {
-      return Stream.value(DashboardFixtures.listings);
+      return Stream<List<ListingRecord>>.value(<ListingRecord>[]);
     }
 
     try {
@@ -100,43 +112,44 @@ class DashboardRepository {
           .stream(primaryKey: ['id'])
           .map((rows) {
             final publicRows = rows
-            .where((Map<String, dynamic> row) => row['is_public'] as bool? ?? false)
+                .where(
+                  (Map<String, dynamic> row) =>
+                      row['is_public'] as bool? ?? false,
+                )
                 .toList();
             return publicRows
-            .map((Map<String, dynamic> json) => listing_model.Listing.fromJson(json))
+                .map(
+                  (Map<String, dynamic> json) =>
+                      listing_model.Listing.fromJson(json),
+                )
                 .map(_toListing)
                 .toList(growable: false)
               ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
           })
           .handleError((e) {
             debugPrint('Supabase listings error: $e');
-            return DashboardFixtures.listings;
+            return <ListingRecord>[];
           });
     } catch (e) {
       debugPrint('Error setting up listings stream: $e');
-      return Stream.value(DashboardFixtures.listings);
+      return Stream<List<ListingRecord>>.value(<ListingRecord>[]);
     }
   }
 
   Future<List<ListingRecord>> _fetchListingsFromApi() async {
     try {
-      final dynamic raw = await _api.getListings();
-      // Backend returns { data: [...], count: N }
-      List<dynamic> items;
-      if (raw is Map && raw.containsKey('data')) {
-        items = raw['data'] as List<dynamic>;
-      } else {
-        items = raw as List<dynamic>;
-      }
-      final records = items
-          .map((e) => _fromApiJson(e as Map<String, dynamic>))
-          .toList(growable: false)
-        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      final items = await _api.getListings();
+      final records =
+          items
+              .map((e) => _fromApiJson(e as Map<String, dynamic>))
+              .where((record) => record.visibility == ListingVisibility.public)
+              .toList(growable: false)
+            ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       debugPrint('✅ Loaded ${records.length} listings from backend API');
       return records;
     } catch (e) {
       debugPrint('❌ Backend fetch failed, falling back: $e');
-      return DashboardFixtures.listings;
+      return <ListingRecord>[];
     }
   }
 
@@ -145,10 +158,11 @@ class DashboardRepository {
     if (AppConfig.hasBackend) {
       try {
         final raw = await _api.getMyRequests();
-        final records = raw
-            .map((e) => Request.fromJson(e as Map<String, dynamic>))
-            .toList(growable: false)
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        final records =
+            raw
+                .map((e) => Request.fromJson(e as Map<String, dynamic>))
+                .toList(growable: false)
+              ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
         debugPrint('✅ Loaded ${records.length} requests from backend API');
         return records;
       } catch (e) {
@@ -184,10 +198,11 @@ class DashboardRepository {
     if (AppConfig.hasBackend) {
       try {
         final raw = await _api.getMyListings();
-        final records = raw
-            .map((e) => _fromApiJson(e as Map<String, dynamic>))
-            .toList(growable: false)
-          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        final records =
+            raw
+                .map((e) => _fromApiJson(e as Map<String, dynamic>))
+                .toList(growable: false)
+              ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
         debugPrint('✅ Loaded ${records.length} my listings from backend API');
         return records;
       } catch (e) {
@@ -209,39 +224,45 @@ class DashboardRepository {
 
   /// Watch block stats — derived from listings
   Stream<List<BlockMarketStat>> watchBlockStats() {
-    return watchListings().map((listings) {
-      final blockMap = <String, List<ListingRecord>>{};
-      for (final listing in listings) {
-        blockMap.putIfAbsent(listing.blockName, () => []).add(listing);
-      }
+    return watchListings()
+        .map((listings) {
+          final blockMap = <String, List<ListingRecord>>{};
+          for (final listing in listings) {
+            blockMap.putIfAbsent(listing.blockName, () => []).add(listing);
+          }
 
-      final stats = blockMap.entries.map((entry) {
-        final lst = entry.value;
-        final hotCount = lst.where((l) => l.signalTone == ListingTone.hot).length;
-        final demandRatio = lst.isNotEmpty ? ((hotCount / lst.length) + 1.0) : 1.0;
-        final coords = _resolveBlockCenter(entry.key, lst);
+          final stats = blockMap.entries.map((entry) {
+            final lst = entry.value;
+            final hotCount = lst
+                .where((l) => l.signalTone == ListingTone.hot)
+                .length;
+            final demandRatio = lst.isNotEmpty
+                ? ((hotCount / lst.length) + 1.0)
+                : 1.0;
+            final coords = _resolveBlockCenter(entry.key, lst);
 
-        return BlockMarketStat(
-          blockName: entry.key,
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          demandRatio: demandRatio,
-          supplyRatio: 1.0,
-          label: demandRatio > 2.0
-              ? 'Overheated'
-              : demandRatio > 1.5
+            return BlockMarketStat(
+              blockName: entry.key,
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              demandRatio: demandRatio,
+              supplyRatio: 1.0,
+              label: demandRatio > 2.0
+                  ? 'Overheated'
+                  : demandRatio > 1.5
                   ? 'Hot Zone'
                   : demandRatio > 1.0
-                      ? 'Demand Spike'
-                      : 'Balanced',
-        );
-      }).toList();
+                  ? 'Demand Spike'
+                  : 'Balanced',
+            );
+          }).toList();
 
-      return stats..sort((a, b) => b.demandRatio.compareTo(a.demandRatio));
-    }).handleError((e) {
-      debugPrint('Error computing block stats: $e');
-      return DashboardFixtures.blockStats;
-    });
+          return stats..sort((a, b) => b.demandRatio.compareTo(a.demandRatio));
+        })
+        .handleError((e) {
+          debugPrint('Error computing block stats: $e');
+          return DashboardFixtures.blockStats;
+        });
   }
 
   ({double latitude, double longitude}) _resolveBlockCenter(
@@ -249,9 +270,9 @@ class DashboardRepository {
     List<ListingRecord> listings,
   ) {
     final listingWithCoordinates = listings.cast<ListingRecord?>().firstWhere(
-          (listing) => listing?.hasCoordinates ?? false,
-          orElse: () => null,
-        );
+      (listing) => listing?.hasCoordinates ?? false,
+      orElse: () => null,
+    );
 
     if (listingWithCoordinates != null) {
       return (
@@ -289,10 +310,11 @@ class DashboardRepository {
   Future<List<MatchLead>> _fetchNotificationsFromApi() async {
     try {
       final raw = await _api.getNotifications();
-      final leads = raw
-          .map((e) => MatchLead.fromJson(e as Map<String, dynamic>))
-          .toList(growable: false)
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final leads =
+          raw
+              .map((e) => MatchLead.fromJson(e as Map<String, dynamic>))
+              .toList(growable: false)
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       debugPrint('✅ Loaded ${leads.length} notifications from backend API');
       return leads;
     } catch (e) {
@@ -315,7 +337,9 @@ class DashboardRepository {
             volumeLabel: '${json['public_listings_count'] ?? 0} Active',
           );
         }).toList();
-        debugPrint('✅ Loaded ${entries.length} leaderboard entries from backend API');
+        debugPrint(
+          '✅ Loaded ${entries.length} leaderboard entries from backend API',
+        );
         return entries;
       } catch (e) {
         debugPrint('❌ Backend leaderboard failed, falling back: $e');

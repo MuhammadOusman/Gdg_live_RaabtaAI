@@ -22,10 +22,7 @@ class ApiService {
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'phone_number': phone,
-        'name': name,
-      }),
+      body: jsonEncode({'phone_number': phone, 'name': name}),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -56,7 +53,10 @@ class ApiService {
     throw Exception('Not authenticated. Please log in.');
   }
 
-  Future<Map<String, dynamic>> sendMessage(String text, {String source = 'app'}) async {
+  Future<Map<String, dynamic>> sendMessage(
+    String text, {
+    String source = 'app',
+  }) async {
     await ensureAuthenticated();
     final url = Uri.parse('${AppConfig.backendUrl}/api/message');
     final response = await http.post(
@@ -89,7 +89,12 @@ class ApiService {
     final url = Uri.parse('${AppConfig.backendUrl}/api/listings');
     final response = await http.get(url, headers: _headers());
     if (response.statusCode == 200) {
-      return jsonDecode(response.body) as List<dynamic>;
+      final decoded = jsonDecode(response.body);
+      if (decoded is List<dynamic>) return decoded;
+      if (decoded is Map<String, dynamic> && decoded['data'] is List<dynamic>) {
+        return decoded['data'] as List<dynamic>;
+      }
+      throw Exception('Unexpected listings response shape');
     }
     throw Exception('Failed to load listings: ${response.statusCode}');
   }
@@ -99,7 +104,12 @@ class ApiService {
     final url = Uri.parse('${AppConfig.backendUrl}/api/listings/my');
     final response = await http.get(url, headers: _headers());
     if (response.statusCode == 200) {
-      return jsonDecode(response.body) as List<dynamic>;
+      final decoded = jsonDecode(response.body);
+      if (decoded is List<dynamic>) return decoded;
+      if (decoded is Map<String, dynamic> && decoded['data'] is List<dynamic>) {
+        return decoded['data'] as List<dynamic>;
+      }
+      throw Exception('Unexpected my listings response shape');
     }
     throw Exception('Failed to load my listings: ${response.statusCode}');
   }
@@ -107,17 +117,28 @@ class ApiService {
   Future<Map<String, dynamic>> createListing(Map<String, dynamic> data) async {
     await ensureAuthenticated();
     final url = Uri.parse('${AppConfig.backendUrl}/api/listings');
-    final response = await http.post(url, headers: _headers(), body: jsonEncode(data));
+    final response = await http.post(
+      url,
+      headers: _headers(),
+      body: jsonEncode(data),
+    );
     if (response.statusCode == 201 || response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
     throw Exception('Failed to create listing: ${response.statusCode}');
   }
 
-  Future<Map<String, dynamic>> updateListing(String id, Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> updateListing(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
     await ensureAuthenticated();
     final url = Uri.parse('${AppConfig.backendUrl}/api/listings/$id');
-    final response = await http.patch(url, headers: _headers(), body: jsonEncode(data));
+    final response = await http.patch(
+      url,
+      headers: _headers(),
+      body: jsonEncode(data),
+    );
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
@@ -169,7 +190,9 @@ class ApiService {
     final url = Uri.parse('${AppConfig.backendUrl}/api/notifications/$id/read');
     final response = await http.patch(url, headers: _headers());
     if (response.statusCode != 200) {
-      throw Exception('Failed to mark notification read: ${response.statusCode}');
+      throw Exception(
+        'Failed to mark notification read: ${response.statusCode}',
+      );
     }
   }
 

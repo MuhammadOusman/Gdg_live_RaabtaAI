@@ -9,12 +9,14 @@ import 'package:uuid/uuid.dart';
 import 'models/chat_message.dart';
 import 'services/recording_path.dart';
 import 'services/voice_note_transcriber.dart';
+import '../../services/api_service.dart';
 
 class ChatController extends ChangeNotifier {
   final List<ChatMessage> _messages = [];
   final Record _recorder = Record();
   final VoiceNoteTranscriber _transcriber = VoiceNoteTranscriber();
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final ApiService _apiService = ApiService();
 
   bool _isRecording = false;
   int _recordingDuration = 0;
@@ -103,7 +105,7 @@ class ChatController extends ChangeNotifier {
     ]);
   }
 
-  void sendText(String text) {
+  Future<void> sendText(String text) async {
     final msg = ChatMessage(
       id: _uuid.v4(),
       sender: 'me',
@@ -113,6 +115,43 @@ class ChatController extends ChangeNotifier {
     );
     _messages.insert(0, msg);
     notifyListeners();
+
+    try {
+      final response = await _apiService.sendMessage(text, source: 'app');
+      _handleAgentResponse(response);
+    } catch (e) {
+      debugPrint('Error sending message to agent: $e');
+    }
+  }
+
+  void _handleAgentResponse(Map<String, dynamic> response) {
+    String? replyText;
+
+    if (response['status'] == 'market_query_result') {
+       replyText = response['advice'];
+    } else if (response['status'] == 'listing_saved') {
+       replyText = response['preview'];
+    } else if (response['status'] == 'demand_saved') {
+       replyText = response['preview'];
+    } else if (response['status'] == 'conflict') {
+       replyText = response['conflict_message'];
+    } else if (response['status'] == 'awaiting_confirm') {
+       replyText = response['preview'];
+    } else if (response['message'] != null) {
+       replyText = response['message'];
+    }
+
+    if (replyText != null) {
+      final reply = ChatMessage(
+        id: _uuid.v4(),
+        sender: 'them',
+        text: replyText,
+        timestamp: DateTime.now(),
+        type: MessageType.text,
+      );
+      _messages.insert(0, reply);
+      notifyListeners();
+    }
   }
 
   Future<void> startRecording() async {
@@ -152,6 +191,16 @@ class ChatController extends ChangeNotifier {
         type: MessageType.audio,
       );
       _messages.insert(0, msg);
+      notifyListeners();
+
+      if (transcript.isNotEmpty) {
+        try {
+          final response = await _apiService.sendMessage(transcript, source: 'app');
+          _handleAgentResponse(response);
+        } catch (e) {
+          debugPrint('Error sending voice transcript to agent: $e');
+        }
+      }
     }
     notifyListeners();
   }

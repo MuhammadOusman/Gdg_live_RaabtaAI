@@ -14,33 +14,74 @@ class ApiService {
   String? get token => _token;
   Map<String, dynamic>? get currentAgent => _currentAgent;
 
+  bool get isAuthenticated => _token != null;
+
+  Future<void> sendOtp(String phone) async {
+    final url = Uri.parse('${AppConfig.backendUrl}/api/auth/send-otp');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone': phone}),
+    );
+
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['error'] ?? 'Failed to send OTP');
+    }
+  }
+
+  Future<void> verifyOtp(String phone, String token) async {
+    final url = Uri.parse('${AppConfig.backendUrl}/api/auth/verify-otp');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone': phone, 'token': token}),
+    );
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+      _token = body['access_token'] as String?;
+      _currentAgent = {
+        'id': body['agent_id'],
+        'is_new': body['is_new_agent'],
+      };
+      debugPrint('Successfully verified OTP and authenticated.');
+    } else {
+      final body = jsonDecode(response.body);
+      throw Exception(body['error'] ?? 'Failed to verify OTP');
+    }
+  }
+
   Future<void> ensureAuthenticated() async {
     if (_token != null) return;
 
-    final url = Uri.parse('${AppConfig.backendUrl}/api/auth/login');
-    try {
-      debugPrint('Logging in to backend at $url for phone: ${AppConfig.agentPhone}');
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'phone_number': AppConfig.agentPhone,
-          'name': AppConfig.agentName,
-        }),
-      );
+    // Fallback to legacy login if agent info exists in config (for development)
+    if (AppConfig.agentPhone.isNotEmpty) {
+      final url = Uri.parse('${AppConfig.backendUrl}/api/auth/login');
+      try {
+        debugPrint('Logging in to backend at $url for phone: ${AppConfig.agentPhone}');
+        final response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'phone_number': AppConfig.agentPhone,
+            'name': AppConfig.agentName,
+          }),
+        );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final body = jsonDecode(response.body);
-        _token = body['token'] as String?;
-        _currentAgent = body['agent'] as Map<String, dynamic>?;
-        debugPrint('Successfully authenticated with backend. Token: ${_token?.substring(0, 10)}...');
-      } else {
-        throw Exception('Backend authentication failed with status ${response.statusCode}: ${response.body}');
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final body = jsonDecode(response.body);
+          _token = body['token'] as String?;
+          _currentAgent = body['agent'] as Map<String, dynamic>?;
+          debugPrint('Successfully authenticated with backend via legacy login.');
+          return;
+        }
+      } catch (e) {
+        debugPrint('Legacy login failed: $e');
       }
-    } catch (e) {
-      debugPrint('Error authenticating with backend: $e');
-      rethrow;
     }
+
+    throw Exception('Not authenticated. Please log in.');
   }
 
   Map<String, String> _headers() {

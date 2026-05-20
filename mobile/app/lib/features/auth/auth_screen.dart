@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/api_service.dart';
 import '../../app/app_theme.dart';
 
@@ -13,16 +14,40 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
   bool _isOtpSent = false;
   bool _isLoading = false;
   final ApiService _apiService = ApiService();
 
   Future<void> _sendOtp() async {
-    if (_phoneController.text.isEmpty) return;
+    if (_phoneController.text.isEmpty || _nameController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter both name and phone number')),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
+      // Step 1: Verify if agent exists in Supabase
+      final response = await Supabase.instance.client
+          .from('agents')
+          .select()
+          .eq('id', _phoneController.text)
+          .maybeSingle();
+
+      if (response == null) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('User not found. Please contact admin.')),
+          );
+        }
+        return;
+      }
+
+      // Step 2: Call backend to send OTP
       await _apiService.sendOtp(_phoneController.text);
       setState(() {
         _isOtpSent = true;
@@ -95,6 +120,16 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 48),
               if (!_isOtpSent) ...[
+                TextField(
+                  controller: _nameController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Full Name',
+                    hintText: 'e.g. Muhammad Ousman',
+                    prefixIcon: const Icon(Icons.person_rounded, color: Colors.white70),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 TextField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,

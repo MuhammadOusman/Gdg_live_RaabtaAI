@@ -62,8 +62,22 @@ class Listing extends Equatable {
         final regExp = RegExp(r'POINT\s*\(\s*([0-9.-]+)\s+([0-9.-]+)\s*\)', caseSensitive: false);
         final match = regExp.firstMatch(geoPoint);
         if (match != null && match.groupCount >= 2) {
-          lng = double.tryParse(match.group(1) ?? '');
-          lat = double.tryParse(match.group(2) ?? '');
+          // PostGIS uses (Longitude, Latitude) order.
+          // However, if the user reports placement issues, they might be stored as (lat, lng).
+          // Heuristic for Karachi: Latitude ~24.9, Longitude ~67.1
+          final first = double.tryParse(match.group(1) ?? '');
+          final second = double.tryParse(match.group(2) ?? '');
+
+          if (first != null && second != null) {
+            // Check which one is closer to Karachi's typical longitude (~67)
+            if ((first - 67.0).abs() < (second - 67.0).abs()) {
+               lng = first;
+               lat = second;
+            } else {
+               lat = first;
+               lng = second;
+            }
+          }
         }
       }
     }

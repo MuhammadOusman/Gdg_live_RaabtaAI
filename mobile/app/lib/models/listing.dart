@@ -45,11 +45,26 @@ class Listing extends Equatable {
     final geoPoint = json['geo_point'];
     if (geoPoint != null) {
       if (geoPoint is Map) {
-        lat = (geoPoint['lat'] ?? geoPoint['y'])?.toDouble();
-        lng = (geoPoint['lng'] ?? geoPoint['x'])?.toDouble();
+        if (geoPoint.containsKey('coordinates')) {
+          final coords = geoPoint['coordinates'];
+          if (coords is List && coords.length >= 2) {
+            lng = (coords[0])?.toDouble();
+            lat = (coords[1])?.toDouble();
+          }
+        } else {
+          lat = (geoPoint['lat'] ?? geoPoint['y'])?.toDouble();
+          lng = (geoPoint['lng'] ?? geoPoint['x'])?.toDouble();
+        }
       } else if (geoPoint is List && geoPoint.length >= 2) {
         lng = (geoPoint[0])?.toDouble();
         lat = (geoPoint[1])?.toDouble();
+      } else if (geoPoint is String) {
+        final regExp = RegExp(r'POINT\s*\(\s*([0-9.-]+)\s+([0-9.-]+)\s*\)', caseSensitive: false);
+        final match = regExp.firstMatch(geoPoint);
+        if (match != null && match.groupCount >= 2) {
+          lng = double.tryParse(match.group(1) ?? '');
+          lat = double.tryParse(match.group(2) ?? '');
+        }
       }
     }
 

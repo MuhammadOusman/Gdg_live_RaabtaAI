@@ -115,21 +115,22 @@ class _BottomNavShell extends StatelessWidget {
       alignment: Alignment.bottomCenter,
       child: SafeArea(
         top: false,
-        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        minimum: const EdgeInsets.fromLTRB(18, 0, 18, 8),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(22),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
             child: Container(
               decoration: BoxDecoration(
                 color: RaabtaTheme.charcoal.withValues(alpha: 0.78),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: BorderRadius.circular(22),
               ),
               child: Consumer<DashboardController>(
                 builder: (context, controller, _) {
                   return NavigationBar(
-                    height: 76,
+                    height: 60,
+                    labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                     backgroundColor: Colors.transparent,
                     selectedIndex: controller.tabIndex,
                     onDestinationSelected: controller.setTabIndex,

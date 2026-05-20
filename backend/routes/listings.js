@@ -41,7 +41,7 @@ router.get('/', async (req, res) => {
 
     let query = supabase
         .from('listings')
-        .select('id, owner_agent_id, block_id, sub_location_raw, size, unit, features, demand_price, status, is_hot_property, created_at, agents(name, agency_name, is_verified)')
+        .select('id, owner_agent_id, block_id, sub_location_raw, size, unit, features, demand_price, status, is_hot_property, created_at, updated_at, geo_point, notes, agents(name, agency_name, is_verified)')
         .eq('is_public', true);
 
     if (block_id) query = query.eq('block_id', block_id);

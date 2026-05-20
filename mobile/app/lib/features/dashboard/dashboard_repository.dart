@@ -227,34 +227,20 @@ class DashboardRepository {
     return (latitude: 24.86, longitude: 67.03);
   }
 
-  /// Watch match leads — tries backend, falls back to Supabase, then fixtures
-  Stream<List<MatchLead>> watchMatchLeads() {
-    if (AppConfig.hasBackend) {
-      return Stream.fromFuture(_fetchNotificationsFromApi()).handleError((e) {
-        debugPrint('Backend notifications error: $e');
-        return DashboardFixtures.matchLeads;
-      });
-    }
-
-    if (!AppConfig.hasSupabase) return Stream.value(DashboardFixtures.matchLeads);
-
-    try {
-      return Supabase.instance.client
-          .from('notifications')
-          .stream(primaryKey: ['id'])
-          .map((rows) {
-            return rows
-                .map((json) => MatchLead.fromJson(json))
-                .toList(growable: false)
-              ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          })
-          .handleError((e) {
-            debugPrint('Supabase notifications error: $e');
-            return DashboardFixtures.matchLeads;
-          });
-    } catch (e) {
-      debugPrint('Error setting up match leads stream: $e');
-      return Stream.value(DashboardFixtures.matchLeads);
+  /// Watch match leads — uses backend API polling as requested
+  Stream<List<MatchLead>> watchMatchLeads() async* {
+    while (true) {
+      if (AppConfig.hasBackend) {
+        try {
+          final notifications = await _fetchNotificationsFromApi();
+          yield notifications;
+        } catch (e) {
+          debugPrint('Backend notifications error: $e');
+        }
+      } else {
+        yield DashboardFixtures.matchLeads;
+      }
+      await Future.delayed(const Duration(seconds: 10));
     }
   }
 

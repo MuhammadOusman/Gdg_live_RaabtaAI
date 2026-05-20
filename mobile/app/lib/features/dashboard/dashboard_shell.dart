@@ -173,11 +173,76 @@ class PulseMapScreen extends StatefulWidget {
 class _PulseMapScreenState extends State<PulseMapScreen> {
   late final ScrollController _carouselController = ScrollController();
   GoogleMapController? _googleMapController;
+  bool _hasInitialZoom = false;
 
   static const CameraPosition _kKarachi = CameraPosition(
     target: LatLng(24.91, 67.08),
     zoom: 12.2,
   );
+
+  void _zoomToWorkAreas(DashboardController controller) {
+    if (_googleMapController == null || controller.selectedWorkAreas.isEmpty) return;
+
+    LatLngBounds? bounds;
+
+    // Check if we have listings in selected work areas to zoom to
+    final filteredListings = controller.listings.where((l) => l.hasCoordinates).toList();
+
+    if (filteredListings.isNotEmpty) {
+      double minLat = filteredListings.first.latitude!;
+      double maxLat = filteredListings.first.latitude!;
+      double minLng = filteredListings.first.longitude!;
+      double maxLng = filteredListings.first.longitude!;
+
+      for (final l in filteredListings) {
+        if (l.latitude! < minLat) minLat = l.latitude!;
+        if (l.latitude! > maxLat) maxLat = l.latitude!;
+        if (l.longitude! < minLng) minLng = l.longitude!;
+        if (l.longitude! > maxLng) maxLng = l.longitude!;
+      }
+
+      bounds = LatLngBounds(
+        southwest: LatLng(minLat, minLng),
+        northeast: LatLng(maxLat, maxLng),
+      );
+    } else {
+      // Fallback to block centroids if no listings found
+      final areas = controller.selectedWorkAreas;
+      final coords = areas.map((a) {
+         if (a.contains('Nazimabad')) return const LatLng(24.93, 67.04);
+         if (a.contains('PECHS')) return const LatLng(24.87, 67.05);
+         if (a.contains('Gulshan')) return const LatLng(24.91, 67.10);
+         if (a.contains('Scheme 33')) return const LatLng(24.95, 67.12);
+         return const LatLng(24.91, 67.08); // Default Karachi
+      }).toList();
+
+      double minLat = coords.first.latitude;
+      double maxLat = coords.first.latitude;
+      double minLng = coords.first.longitude;
+      double maxLng = coords.first.longitude;
+
+      for (final c in coords) {
+        if (c.latitude < minLat) minLat = c.latitude;
+        if (c.latitude > maxLat) maxLat = c.latitude;
+        if (c.longitude < minLng) minLng = c.longitude;
+        if (c.longitude > maxLng) maxLng = c.longitude;
+      }
+
+      bounds = LatLngBounds(
+        southwest: LatLng(minLat, minLng),
+        northeast: LatLng(maxLat, maxLng),
+      );
+    }
+
+    if (bounds != null) {
+      _googleMapController!.animateCamera(
+        CameraUpdate.newLatLngBounds(bounds, 50),
+      );
+      setState(() {
+        _hasInitialZoom = true;
+      });
+    }
+  }
 
   static const String _darkMapStyleJson = r'''
 [
@@ -420,6 +485,9 @@ class _PulseMapScreenState extends State<PulseMapScreen> {
                 initialCameraPosition: _kKarachi,
                 onMapCreated: (googleController) {
                   _googleMapController = googleController;
+                  if (!_hasInitialZoom) {
+                    _zoomToWorkAreas(controller);
+                  }
                 },
                 style: _darkMapStyleJson,
                 markers: myMarkers,

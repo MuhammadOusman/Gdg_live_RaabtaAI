@@ -238,6 +238,22 @@ export async function confirmAndSave(parsedData, senderAgentId, sessionId) {
         is_verified: true
     }, { onConflict: 'id' });
 
+    if (parsedData.is_public) {
+        logStep(sessionId, 'Negotiator', 'duplicate_check', 'running',
+            `Block: ${parsedData.block_id}, Size: ${parsedData.size}, Price: ${parsedData.demand_price}`, ''
+        );
+        const dupCheck = await checkDuplicates(parsedData, senderAgentId);
+        if (dupCheck.isDuplicate) {
+            logStep(sessionId, 'Negotiator', 'duplicate_check', 'done', '', 'Conflict found');
+            return {
+                status: 'conflict',
+                message: dupCheck.conflictMessage,
+                session_id: sessionId,
+            };
+        }
+        logStep(sessionId, 'Negotiator', 'duplicate_check', 'done', '', 'No conflicts — clear');
+    }
+
     logStep(sessionId, 'Gatekeeper', 'saving_listing', 'running', '', '');
     const savedListing = await saveListing(parsedData, senderAgentId);
     logStep(sessionId, 'Gatekeeper', 'saving_listing', 'done', '', `ID: ${savedListing.id}`);

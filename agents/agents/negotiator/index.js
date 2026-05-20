@@ -31,8 +31,7 @@ export async function checkDuplicates(parsedData, ownerAgentId) {
         .select('id, block_id, size, unit, demand_price, sub_location_raw, owner_agent_id')
         .eq('block_id', block_id)
         .eq('is_public', true)
-        .eq('status', 'active')
-        .neq('owner_agent_id', ownerAgentId);
+        .eq('status', 'active');
 
     if (error) throw new Error(`Negotiator: Duplicate check failed — ${error.message}`);
 

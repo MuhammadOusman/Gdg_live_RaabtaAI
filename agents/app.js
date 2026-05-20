@@ -132,7 +132,7 @@ app.post('/api/recommender/run', handleRecommenderRun);
 
 // Only start listening when running locally (Vercel handles this automatically)
 if (!process.env.VERCEL) {
-    const PORT = process.env.PORT || 3000;
+    const PORT = process.env.PORT || 8080;
     app.listen(PORT, () => {
         console.log(`\n🚀 Raabta AI — port ${PORT}`);
         console.log(`📡 http://localhost:${PORT}/health\n`);

@@ -64,7 +64,7 @@ class ApiService {
       headers: _headers(),
       body: jsonEncode({
         'raw_text': text,
-        'sender_agent_id': _currentAgent?['id'],
+        'sender_agent_id': _resolveSenderAgentId(),
         'source': source,
       }),
     );
@@ -73,6 +73,46 @@ class ApiService {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
     throw Exception('Failed to send message: ${response.statusCode}');
+  }
+
+  Future<Map<String, dynamic>> confirmMessage({
+    required Map<String, dynamic> parsedData,
+    required String sessionId,
+  }) async {
+    await ensureAuthenticated();
+    final url = Uri.parse('${AppConfig.backendUrl}/api/confirm');
+    final response = await http.post(
+      url,
+      headers: _headers(),
+      body: jsonEncode({
+        'parsed_data': parsedData,
+        'sender_agent_id': _resolveSenderAgentId(),
+        'session_id': sessionId,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception('Failed to confirm message: ${response.statusCode}');
+  }
+
+  String _resolveSenderAgentId() {
+    String normalize(dynamic value) {
+      final raw = (value ?? '').toString().trim();
+      if (raw.isEmpty) return '';
+      final digits = raw.replaceAll(RegExp(r'\D'), '');
+      return digits.isEmpty ? raw : '+$digits';
+    }
+
+    final fromPhone = normalize(_currentAgent?['phone_number']);
+    if (fromPhone.isNotEmpty) return fromPhone;
+
+    final configured = normalize(AppConfig.agentPhone);
+    if (configured.isNotEmpty) return configured;
+
+    final fallbackId = (_currentAgent?['id'] ?? '').toString().trim();
+    return fallbackId;
   }
 
   Map<String, String> _headers() {

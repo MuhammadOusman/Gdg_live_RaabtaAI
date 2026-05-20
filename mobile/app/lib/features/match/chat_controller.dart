@@ -30,9 +30,10 @@ class ChatController extends ChangeNotifier {
   StreamSubscription? _positionSub;
   StreamSubscription? _durationSub;
   StreamSubscription? _completeSub;
+  Map<String, dynamic>? _pendingParsed;
+  String? _pendingSessionId;
 
   ChatController() {
-    _seedConversation();
     _initAudioPlayer();
   }
 
@@ -68,43 +69,6 @@ class ChatController extends ChangeNotifier {
     });
   }
 
-  void _seedConversation() {
-    if (_messages.isNotEmpty) {
-      return;
-    }
-
-    _messages.addAll([
-      ChatMessage(
-        id: _uuid.v4(),
-        sender: 'them',
-        type: MessageType.image,
-        mediaLabel: 'Shared preview',
-        text: 'Looks good. Send the voice note too.',
-        timestamp: DateTime.now().subtract(const Duration(minutes: 18)),
-      ),
-      ChatMessage(
-        id: _uuid.v4(),
-        sender: 'me',
-        text: 'loru',
-        timestamp: DateTime.now().subtract(const Duration(minutes: 9)),
-      ),
-      ChatMessage(
-        id: _uuid.v4(),
-        sender: 'them',
-        type: MessageType.audio,
-        audioPath: null,
-        text: 'Voice note',
-        timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-      ),
-      ChatMessage(
-        id: _uuid.v4(),
-        sender: 'me',
-        text: '.',
-        timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
-      ),
-    ]);
-  }
-
   Future<void> sendText(String text) async {
     final msg = ChatMessage(
       id: _uuid.v4(),
@@ -116,29 +80,105 @@ class ChatController extends ChangeNotifier {
     _messages.insert(0, msg);
     notifyListeners();
 
+    await _processOutgoingText(text);
+  }
+
+  Future<void> _processOutgoingText(String text) async {
     try {
+      final normalized = text.toLowerCase().trim();
+      final isPublicConfirm =
+          normalized == 'confirm public' ||
+          normalized == 'public' ||
+          normalized == '1';
+      final isPrivateConfirm =
+          normalized == 'confirm private' ||
+          normalized == 'private' ||
+          normalized == '2' ||
+          normalized == 'confirm' ||
+          normalized == 'yes' ||
+          normalized == 'confirmed';
+
+      if ((isPublicConfirm || isPrivateConfirm) &&
+          _pendingParsed != null &&
+          _pendingSessionId != null) {
+        final parsed = Map<String, dynamic>.from(_pendingParsed!);
+        parsed['is_public'] = isPublicConfirm;
+        _pendingParsed = null;
+        final sessionId = _pendingSessionId!;
+        _pendingSessionId = null;
+        final response = await _apiService.confirmMessage(
+          parsedData: parsed,
+          sessionId: sessionId,
+        );
+        _handleAgentResponse(response, isConfirmationResponse: true);
+        return;
+      }
+
       final response = await _apiService.sendMessage(text, source: 'app');
-      _handleAgentResponse(response);
+      _handleAgentResponse(response, isConfirmationResponse: false);
     } catch (e) {
       debugPrint('Error sending message to agent: $e');
     }
   }
 
-  void _handleAgentResponse(Map<String, dynamic> response) {
+  void _handleAgentResponse(
+    Map<String, dynamic> response, {
+    required bool isConfirmationResponse,
+  }) {
     String? replyText;
 
     if (response['status'] == 'market_query_result') {
-       replyText = response['advice'];
+      final stats = response['stats'] as Map<String, dynamic>? ?? {};
+      final ratio = stats['demand_ratio'];
+      final ratioText = ratio is num ? ratio.toStringAsFixed(2) : '$ratio';
+      replyText =
+          'Recommender Insights:\n\n'
+          '${response['advice'] ?? ''}\n\n'
+          'Stats for ${response['block_id'] ?? 'this block'}:\n'
+          'Supply: ${stats['supply'] ?? 0} plots\n'
+          'Demand: ${stats['demand'] ?? 0} requests\n'
+          'Ratio: ${ratioText == 'null' ? '0' : ratioText}';
     } else if (response['status'] == 'listing_saved') {
-       replyText = response['preview'];
+      if (isConfirmationResponse) {
+        final parsed = response['parsed_data'] as Map<String, dynamic>?;
+        final isPublic = parsed?['is_public'] == true;
+        final count = response['matches_count'] as int? ?? 0;
+        if (isPublic) {
+          replyText = count > 0
+              ? 'Listing saved publicly. We found $count matching buyer(s) and notified them.'
+              : 'Listing saved publicly. No matching buyers right now, we will alert you on match.';
+        } else {
+          replyText = 'Listing saved privately in your Vault.';
+        }
+      } else {
+        replyText =
+            'Listing saved successfully in our system. Matchmaker is scanning for buyers...';
+      }
     } else if (response['status'] == 'demand_saved') {
-       replyText = response['preview'];
+      final matches = response['matches'] as List<dynamic>?;
+      replyText =
+          'Searching... Demand saved. We found ${matches?.length ?? 0} immediate matches.';
     } else if (response['status'] == 'conflict') {
-       replyText = response['conflict_message'];
+      replyText = 'Conflict Detected:\n${response['conflict_message'] ?? ''}';
     } else if (response['status'] == 'awaiting_confirm') {
-       replyText = response['preview'];
+      _pendingParsed = response['parsed'] as Map<String, dynamic>?;
+      _pendingSessionId = response['session_id']?.toString();
+      final parsed = _pendingParsed ?? const <String, dynamic>{};
+      final features = parsed['features'] as List<dynamic>?;
+      final featuresText = (features != null && features.isNotEmpty)
+          ? '\nFeatures: ${features.join(', ')}'
+          : '';
+      final demandPrice = parsed['demand_price'];
+      replyText =
+          'Please Confirm:\n\n'
+          'Block: ${parsed['block_id'] ?? ''}\n'
+          'Size: ${parsed['size'] ?? ''}gz\n'
+          'Demand: PKR ${demandPrice ?? ''}$featuresText\n\n'
+          'Choose Visibility:\n'
+          '1. Reply "confirm public"\n'
+          '2. Reply "confirm private"';
     } else if (response['message'] != null) {
-       replyText = response['message'];
+      replyText = response['message']?.toString();
     }
 
     if (replyText != null) {
@@ -194,12 +234,7 @@ class ChatController extends ChangeNotifier {
       notifyListeners();
 
       if (transcript.isNotEmpty) {
-        try {
-          final response = await _apiService.sendMessage(transcript, source: 'app');
-          _handleAgentResponse(response);
-        } catch (e) {
-          debugPrint('Error sending voice transcript to agent: $e');
-        }
+        await _processOutgoingText(transcript);
       }
     }
     notifyListeners();

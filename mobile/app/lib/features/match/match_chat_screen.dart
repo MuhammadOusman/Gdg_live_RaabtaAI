@@ -322,11 +322,6 @@ class _ComposerState extends State<_Composer> with SingleTickerProviderStateMixi
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.emoji_emotions_outlined),
-                color: Colors.white70,
-              ),
               Expanded(
                 child: TextField(
                   controller: widget.textController,
@@ -354,22 +349,11 @@ class _ComposerState extends State<_Composer> with SingleTickerProviderStateMixi
                         icon: Icons.send_rounded,
                         onTap: widget.onSend,
                       )
-                    : Row(
+                    : _ActionButton(
                         key: const ValueKey('voice'),
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _ActionButton(
-                            color: const Color(0xFF22272F),
-                            icon: Icons.attach_file_rounded,
-                            onTap: () {},
-                          ),
-                          const SizedBox(width: 8),
-                          _ActionButton(
-                            color: const Color(0xFF24B15E),
-                            icon: Icons.mic_rounded,
-                            onTap: widget.onMicPressed,
-                          ),
-                        ],
+                        color: const Color(0xFF24B15E),
+                        icon: Icons.mic_rounded,
+                        onTap: widget.onMicPressed,
                       ),
               ),
             ],

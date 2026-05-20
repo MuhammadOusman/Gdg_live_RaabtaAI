@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 
 import 'app/app_config.dart';
 import 'app/app_theme.dart';
@@ -10,9 +11,16 @@ import 'features/auth/auth_screen.dart';
 import 'services/api_service.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await AppBootstrap.initialize();
-  runApp(const RaabtaApp());
+  runZonedGuarded(() async {
+    // Silence Flutter app logs in debug/dev runs.
+    debugPrint = (String? message, {int? wrapWidth}) {};
+
+    WidgetsFlutterBinding.ensureInitialized();
+    await AppBootstrap.initialize();
+    runApp(const RaabtaApp());
+  }, (error, stack) {}, zoneSpecification: ZoneSpecification(
+    print: (self, parent, zone, line) {},
+  ));
 }
 
 class RaabtaApp extends StatefulWidget {

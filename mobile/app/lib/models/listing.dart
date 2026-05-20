@@ -63,11 +63,15 @@ class Listing extends Equatable {
       subLocationRaw: json['sub_location_raw'],
       size: json['size'],
       unit: json['unit'] ?? 'gaz',
-      features: List<String>.from(json['features'] ?? []),
+      features: json['features'] is String 
+          ? [json['features'] as String]
+          : (json['features'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       demandPrice: json['demand_price'],
       status: json['status'] ?? 'active',
       isHotProperty: json['is_hot_property'] ?? false,
-      notes: json['notes'] ?? [],
+      notes: json['notes'] is String 
+          ? [json['notes']]
+          : List<dynamic>.from(json['notes'] ?? []),
       createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
       updatedAt: DateTime.parse(json['updated_at'] ?? DateTime.now().toIso8601String()),
     );

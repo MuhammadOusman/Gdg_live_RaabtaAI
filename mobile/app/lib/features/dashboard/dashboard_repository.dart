@@ -46,10 +46,13 @@ class DashboardRepository {
         ? '${listing.size} ${listing.unit}'
         : '—';
 
-    // Get first note or snippet
-    final notesSnippet = listing.notes.isNotEmpty
-        ? '${listing.notes.first}'.substring(0, 60)
-        : 'No notes';
+    // Get first note or snippet safely
+    final firstNote = listing.notes.isNotEmpty ? '${listing.notes.first}' : '';
+    final notesSnippet = firstNote.length > 60
+        ? '${firstNote.substring(0, 60)}...'
+        : firstNote.isNotEmpty
+            ? firstNote
+            : 'No notes';
 
     // Calculate demand ratio (stub for now - would need more complex logic)
     final demandRatio = 1.0;
@@ -60,8 +63,12 @@ class DashboardRepository {
       priceLabel: priceLabel,
       sizeLabel: sizeLabel,
       notesSnippet: notesSnippet,
-      latitude: listing.latitude ?? 24.8607,
-      longitude: listing.longitude ?? 67.0011,
+      latitude: listing.latitude != null && listing.latitude != 0.0
+        ? listing.latitude!
+        : null,
+      longitude: listing.longitude != null && listing.longitude != 0.0
+        ? listing.longitude!
+        : null,
       signalTone: tone,
       visibility: visibility,
       status: status,
@@ -151,11 +158,12 @@ class DashboardRepository {
           final listings = entry.value;
           final hotCount = listings.where((l) => l.signalTone == ListingTone.hot).length;
           final demandRatio = listings.isNotEmpty ? ((hotCount / listings.length) + 1.0) : 1.0;
+          final coords = _resolveBlockCenter(entry.key, listings);
 
           return BlockMarketStat(
             blockName: entry.key,
-            latitude: listings.first.latitude,
-            longitude: listings.first.longitude,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
             demandRatio: demandRatio,
             supplyRatio: 1.0,
             label: demandRatio > 2.0
@@ -177,6 +185,39 @@ class DashboardRepository {
       print('Error setting up block stats stream: $e');
       return Stream.value(DashboardFixtures.blockStats);
     }
+  }
+
+  ({double latitude, double longitude}) _resolveBlockCenter(
+    String blockName,
+    List<ListingRecord> listings,
+  ) {
+    final listingWithCoordinates = listings.cast<ListingRecord?>().firstWhere(
+          (listing) => listing?.hasCoordinates ?? false,
+          orElse: () => null,
+        );
+
+    if (listingWithCoordinates != null) {
+      return (
+        latitude: listingWithCoordinates.latitude!,
+        longitude: listingWithCoordinates.longitude!,
+      );
+    }
+
+    final lower = blockName.toLowerCase();
+    if (lower.contains('nazimabad')) {
+      return (latitude: 24.93, longitude: 67.04);
+    }
+    if (lower.contains('pechs')) {
+      return (latitude: 24.87, longitude: 67.05);
+    }
+    if (lower.contains('gulshan')) {
+      return (latitude: 24.91, longitude: 67.10);
+    }
+    if (lower.contains('scheme 33')) {
+      return (latitude: 24.95, longitude: 67.12);
+    }
+
+    return (latitude: 24.86, longitude: 67.03);
   }
 
   /// Watch match leads (notifications)

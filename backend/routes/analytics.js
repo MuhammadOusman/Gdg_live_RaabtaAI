@@ -55,7 +55,7 @@ router.get('/demand-vs-supply', async (req, res) => {
         .from('listings')
         .select('block_id')
         .eq('is_public', true)
-        .eq('status', 'available');
+        .eq('status', 'active');
 
     const { data: listings, error: lErr } = block_id
         ? await listingsQuery.eq('block_id', block_id)
@@ -64,7 +64,7 @@ router.get('/demand-vs-supply', async (req, res) => {
     const { data: requests, error: rErr } = await supabase
         .from('requests')
         .select('target_blocks')
-        .eq('status', 'active');
+        .eq('status', 'searching');
 
     if (lErr || rErr) return res.status(400).json({ error: lErr?.message || rErr?.message });
 
@@ -105,7 +105,7 @@ router.get('/price-stats', async (req, res) => {
         .from('listings')
         .select('block_id, unit, demand_price')
         .eq('is_public', true)
-        .eq('status', 'available');
+        .eq('status', 'active');
 
     if (block_id) query = query.eq('block_id', block_id);
     if (unit)     query = query.eq('unit', unit);
@@ -178,7 +178,7 @@ router.get('/corner-premium', async (req, res) => {
         .from('listings')
         .select('block_id, features, demand_price')
         .eq('is_public', true)
-        .eq('status', 'available');
+        .eq('status', 'active');
 
     if (block_id) query = query.eq('block_id', block_id);
 

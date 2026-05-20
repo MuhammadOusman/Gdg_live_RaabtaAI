@@ -78,19 +78,25 @@ export async function autoArchiveStale() {
     return data || [];
 }
 
-// refreshBlockStats diagnostics: Since block_market_stats is a database view, we don't insert/update,
-// we just read and log status for health checks.
+// refreshBlockStats diagnostics: We now call the RPC to refresh the Materialized View
+// to guarantee O(1) reads without blocking the database.
 export async function refreshBlockStats() {
-    console.log('[🧹 Janitor] Running diagnostics on block_market_stats view...');
+    console.log('[🧹 Janitor] Refreshing Materialized View block_market_stats via RPC...');
 
     try {
+        // Trigger the materialized view refresh concurrently
+        const { error: rpcError } = await supabase.rpc('refresh_block_market_stats');
+        if (rpcError) {
+            console.warn('[🧹 Janitor] RPC refresh failed (might not be created yet), falling back to standard read:', rpcError.message);
+        }
+
         const { data, error } = await supabase
             .from('block_market_stats')
             .select('*');
 
         if (error) throw error;
 
-        console.log(`[🧹 Janitor] block_market_stats view check: ${data?.length || 0} block(s) computed dynamically by DB`);
+        console.log(`[🧹 Janitor] block_market_stats check: ${data?.length || 0} block(s) fetched`);
         return data || [];
 
     } catch (err) {

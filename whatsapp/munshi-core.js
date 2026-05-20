@@ -21,17 +21,10 @@ function clearAuthSession() {
 }
 
 function normalizeSenderId(senderId) {
-  if (!senderId) {
-    return '';
-  }
-
+  if (!senderId) return '';
   const rawValue = String(senderId);
   const digits = rawValue.replace(/\D/g, '');
-
-  if (!digits) {
-    return rawValue;
-  }
-
+  if (!digits) return rawValue;
   return `+${digits}`;
 }
 
@@ -39,27 +32,16 @@ function pickBestSenderCandidate(candidates = []) {
   for (const candidate of candidates) {
     const normalized = normalizeSenderId(candidate);
     if (normalized && normalized.startsWith('+') && normalized.length >= 9) {
-      return {
-        raw: String(candidate),
-        normalized,
-      };
+      return { raw: String(candidate), normalized };
     }
   }
-
   const first = candidates.find(Boolean);
-  return {
-    raw: first ? String(first) : '',
-    normalized: normalizeSenderId(first || ''),
-  };
+  return { raw: first ? String(first) : '', normalized: normalizeSenderId(first || '') };
 }
 
 async function resolveSender(message) {
   const candidates = [];
-
-  if (message.fromMe && message.to) {
-    candidates.push(message.to);
-  }
-
+  if (message.fromMe && message.to) candidates.push(message.to);
   candidates.push(
     message.author,
     message.from,
@@ -68,23 +50,16 @@ async function resolveSender(message) {
     message._data?.author,
     message._data?.from
   );
-
   try {
     const contact = await message.getContact();
     candidates.unshift(contact?.number);
     candidates.unshift(contact?.id?._serialized);
-  } catch (error) {
-    // Ignore contact fetch errors and continue with field-based fallbacks.
-  }
-
+  } catch (error) {}
   return pickBestSenderCandidate(candidates.filter(Boolean));
 }
 
 function createTranscriber(apiKey, modelName) {
-  if (!apiKey) {
-    return null;
-  }
-
+  if (!apiKey) return null;
   const genAI = new GoogleGenerativeAI(apiKey);
   return genAI.getGenerativeModel({ model: modelName || 'gemini-2.5-flash' });
 }
@@ -99,32 +74,19 @@ async function saveQrFiles(qrText) {
 }
 
 async function transcribeVoiceMessage(message, transcriber) {
-  if (!transcriber) {
-    return '';
-  }
-
+  if (!transcriber) return '';
   const media = await message.downloadMedia();
-  if (!media?.data) {
-    return '';
-  }
-
+  if (!media?.data) return '';
   const mimeType = media.mimetype || 'audio/ogg';
   const result = await transcriber.generateContent([
     'Transcribe this WhatsApp voice message to English text only. If the message is in a non-English language (Urdu, Arabic, Hindi, etc.), translate it to English. Output plain text only, no explanation.',
-    {
-      inlineData: {
-        data: media.data,
-        mimeType,
-      },
-    },
+    { inlineData: { data: media.data, mimeType } },
   ]);
-
   return String(result.response?.text?.() || '').trim();
 }
 
 function buildPayload(message, text, sender) {
   const senderId = sender?.raw || message.author || message.from || '';
-
   return {
     from: sender?.normalized || normalizeSenderId(senderId),
     rawFrom: senderId,
@@ -147,23 +109,12 @@ function createWhatsAppApi(options = {}) {
     clearAuthSession();
     console.log('🧹 Saved WhatsApp session cleared. QR will be generated on startup.');
   } else if (fs.existsSync(AUTH_PATH)) {
-    console.log('ℹ️ Saved WhatsApp session found. QR will only appear if WhatsApp asks to re-login.');
-  } else {
-    console.log('ℹ️ No saved WhatsApp session found. QR should appear on startup.');
-  }
-
-  if (transcriber) {
-    console.log('🎤 Voice transcription: ENABLED (Gemini API detected)');
-  } else {
-    console.log('🎤 Voice transcription: DISABLED (set GEMINI_API_KEY env var to enable)');
-    console.log('   → Tip: $env:GEMINI_API_KEY="your-key"; npm start\n');
+    console.log('ℹ️ Saved WhatsApp session found. You should be logged in automatically!');
   }
 
   const client = new Client({
     authStrategy: new LocalAuth({ dataPath: options.authPath || AUTH_PATH }),
-    webVersionCache: {
-      type: 'none',
-    },
+    webVersionCache: { type: 'none' },
     puppeteer: {
       headless: true,
       args: [
@@ -184,43 +135,26 @@ function createWhatsAppApi(options = {}) {
     console.log('║  WhatsApp API - Scan QR Code  ║');
     console.log('╚═══════════════════════════════╝\n');
     qrcode.generate(qr, { small: true });
-
     try {
       await saveQrFiles(qr);
-      console.log(`\n✅ QR saved (open PNG file to scan):\n📱 ${QR_IMAGE_PATH}\n📝 ${QR_TEXT_PATH}\n`);
-      console.log('💡 Tip: Terminal QR is hard to scan. Open the .png file above with your phone or image viewer.\n');
-    } catch (error) {
-      console.error('❌ QR file save failed:', error.message);
-    }
-
+      console.log(`\n✅ QR saved (open PNG file to scan):\n📱 ${QR_IMAGE_PATH}`);
+    } catch (error) {}
     emitter.emit('qr', qr);
   });
 
   client.on('ready', () => {
-    console.log('\n✅ WhatsApp API is ready.\n');
+    console.log('\n✅ WhatsApp API is ready. (Legacy Engine restored)\n');
     emitter.emit('ready');
-    if (typeof options.onReady === 'function') {
-      options.onReady();
-    }
-  });
-
-  client.on('authenticated', () => {
-    console.log('✅ WhatsApp session authenticated and saved.');
-    emitter.emit('authenticated');
-  });
-
-  client.on('auth_failure', (error) => {
-    console.error('❌ WhatsApp auth failed:', error.message);
-    emitter.emit('auth_failure', error);
-  });
-
-  client.on('disconnected', (reason) => {
-    console.log('⚠️ WhatsApp disconnected:', reason);
-    emitter.emit('disconnected', reason);
   });
 
   client.on('message', async (message) => {
     try {
+      // 🚫 CRITICAL FIX: Ignore all group chats and status broadcasts
+      const isGroup = message.from.includes('@g.us') || (message.chat && message.chat.isGroup);
+      if (isGroup || message.from === 'status@broadcast' || message.fromMe) {
+          return;
+      }
+
       const isVoice = message.type === 'ptt' || message.type === 'audio';
       const baseText = String(message.body || '').trim();
       const transcribedText = isVoice ? await transcribeVoiceMessage(message, transcriber) : '';
@@ -230,17 +164,8 @@ function createWhatsAppApi(options = {}) {
 
       console.log(`📨 ${payload.from || payload.rawFrom}: ${payload.text}`);
       emitter.emit('message', payload, message);
-
-      if (typeof options.onMessage === 'function') {
-        await options.onMessage(payload, message);
-      }
     } catch (error) {
       console.error('❌ Message handling failed:', error.message);
-      emitter.emit('error', error);
-
-      if (typeof options.onError === 'function') {
-        await options.onError(error, message);
-      }
     }
   });
 
@@ -249,21 +174,110 @@ function createWhatsAppApi(options = {}) {
     emitter,
     start: () => client.initialize(),
     on: emitter.on.bind(emitter),
-    once: emitter.once.bind(emitter),
-    off: emitter.off.bind(emitter),
+    sendMessage: async (chatId, content) => await client.sendMessage(chatId, content),
     normalizeSenderId,
   };
 }
 
 if (require.main === module) {
+  require('dotenv').config({ path: '../agents/.env' });
+  const axios = require('axios');
   const api = createWhatsAppApi();
 
-  console.log('🚀 Starting WhatsApp API...');
+  console.log('🚀 Starting WhatsApp API (Restoring original state)...');
 
-  api.start().catch((error) => {
-    console.error('❌ Failed to start WhatsApp API:', error.message);
-    process.exit(1);
+  // In-memory state machine to track users waiting for confirmation
+  const pendingConfirms = new Map();
+
+  // ── SYNC AGENTS (BACKEND) WITH WHATSAPP ─────────────────────
+  api.on('message', async (payload, rawMsg) => {
+    if (!payload.text || payload.text === '[voice message]') return;
+    
+    try {
+      const normalizedText = payload.text.toLowerCase().trim();
+      const isPublicConfirm = normalizedText === 'confirm public' || normalizedText === 'public' || normalizedText === '1';
+      const isPrivateConfirm = normalizedText === 'confirm private' || normalizedText === 'private' || normalizedText === '2' || normalizedText === 'confirm' || normalizedText === 'yes' || normalizedText === 'confirmed';
+      const isConfirming = isPublicConfirm || isPrivateConfirm;
+
+      // Check if user is in a pending confirmation state
+      if (isConfirming && pendingConfirms.has(payload.from)) {
+        console.log(`[🤖 Bot Sync] Forwarding CONFIRMATION to backend from ${payload.from}...`);
+        
+        const pendingData = pendingConfirms.get(payload.from);
+        pendingConfirms.delete(payload.from); // Clear state
+
+        // Override is_public based on their specific confirmation choice
+        pendingData.parsed.is_public = isPublicConfirm;
+
+        const response = await axios.post('http://localhost:3000/api/confirm', {
+          parsed_data: pendingData.parsed,
+          sender_agent_id: payload.from,
+          session_id: pendingData.session_id
+        });
+
+        const result = response.data;
+        if (result.status === 'listing_saved') {
+            const count = result.matches_count || 0;
+            if (pendingData.parsed.is_public) {
+                if (count > 0) {
+                    await rawMsg.reply(`🎉 Listing saved publicly! We found ${count} matching buyer(s) and notified them! Matchmaker is scanning for more...`);
+                } else {
+                    await rawMsg.reply(`🎉 Listing saved publicly! (0 matching buyers found right now). Matchmaker will alert you when a match is found.`);
+                }
+            } else {
+                await rawMsg.reply(`🎉 Listing saved privately in your Vault! Only you can see it.`);
+            }
+        } else if (result.message) {
+            await rawMsg.reply(result.message);
+        }
+        return;
+      }
+
+      console.log(`[🤖 Bot Sync] Forwarding message to backend from ${payload.from}...`);
+      
+      const response = await axios.post('http://localhost:3000/api/message', {
+        raw_text: payload.text,
+        sender_agent_id: payload.from,
+        source: 'whatsapp'
+      });
+
+      const result = response.data;
+      let replyText = '';
+
+      if (result.status === 'conflict') {
+        replyText = `⚠️ Conflict Detected:\n${result.conflict_message}`;
+      } else if (result.status === 'awaiting_confirm') {
+        // Save to state machine
+        pendingConfirms.set(payload.from, {
+          parsed: result.parsed,
+          session_id: result.session_id
+        });
+
+        const f = result.parsed.features && result.parsed.features.length > 0 
+            ? `\n✨ Features: ${result.parsed.features.join(', ')}` : '';
+        replyText = `📋 Please Confirm:\n\n📍 Block: ${result.parsed.block_id}\n📐 Size: ${result.parsed.size}gz\n💰 Demand: PKR ${result.parsed.demand_price.toLocaleString('en-PK')}${f}\n\nChoose Visibility:\n1️⃣ Reply "confirm public" (makes it visible to all brokers & searches for matches)\n2️⃣ Reply "confirm private" (saves it only in your private vault)`;
+      } else if (result.status === 'listing_saved') {
+        replyText = `🎉 Listing saved successfully in our system! Matchmaker is scanning for buyers...`;
+      } else if (result.status === 'market_query_result') {
+        const stats = result.stats || {};
+        replyText = `💡 Recommender Insights:\n\n${result.advice}\n\n📊 Stats for ${result.block_id}:\nSupply: ${stats.supply || 0} plots\nDemand: ${stats.demand || 0} requests\nRatio: ${stats.demand_ratio ? Number(stats.demand_ratio).toFixed(2) : 0}`;
+      } else if (result.status === 'demand_saved') {
+         replyText = `🔍 Searching... Demand saved. We found ${result.matches?.length || 0} immediate matches!`;
+      } else {
+        replyText = result.message || '';
+      }
+
+      if (replyText) {
+         await rawMsg.reply(replyText);
+      }
+
+    } catch (error) {
+       console.error('❌ Backend Sync Error:', error.message);
+       await rawMsg.reply(`❌ Technical error connecting to AI agent backend. Please try again.`);
+    }
   });
+
+  api.start();
 }
 
 module.exports = {

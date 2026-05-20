@@ -16,7 +16,7 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 router.get('/', async (req, res) => {
-    const { block_id, status = 'active', unit, limit = 50, offset = 0 } = req.query;
+    const { block_id, status = 'searching', unit, limit = 50, offset = 0 } = req.query;
 
     let query = supabase
         .from('requests')

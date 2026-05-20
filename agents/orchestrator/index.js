@@ -21,6 +21,20 @@ export async function handleMessage(rawText, senderAgentId, source = 'whatsapp')
     logStep(sessionId, 'Orchestrator', 'start', 'running', rawText, '');
 
     try {
+        // Ensure agent exists in database to prevent foreign key constraint violations
+        const { error: agentError } = await supabase
+            .from('agents')
+            .upsert({
+                id: senderAgentId,
+                name: `WhatsApp Broker (${senderAgentId})`,
+                agency_name: 'WhatsApp Integration',
+                is_verified: true
+            }, { onConflict: 'id' });
+            
+        if (agentError) {
+            console.warn(`[🚀 Orchestrator] Warning: Could not auto-register agent ${senderAgentId}:`, agentError.message);
+        }
+
         // ── Agent 1: Gatekeeper — Parse ───────────────────
         logStep(sessionId, 'Gatekeeper', 'parsing', 'running', rawText, '');
         const { parsed, preview_message, maps_link } = await parseMessage(rawText, senderAgentId);
@@ -216,25 +230,53 @@ Be brief (max 3-4 sentences).`;
 
 // ── Confirm & Save (WA confirm ke baad) ────────────────
 export async function confirmAndSave(parsedData, senderAgentId, sessionId) {
+    // Ensure agent exists
+    await supabase.from('agents').upsert({
+        id: senderAgentId,
+        name: `WhatsApp Broker (${senderAgentId})`,
+        agency_name: 'WhatsApp Integration',
+        is_verified: true
+    }, { onConflict: 'id' });
+
+    if (parsedData.is_public) {
+        logStep(sessionId, 'Negotiator', 'duplicate_check', 'running',
+            `Block: ${parsedData.block_id}, Size: ${parsedData.size}, Price: ${parsedData.demand_price}`, ''
+        );
+        const dupCheck = await checkDuplicates(parsedData, senderAgentId);
+        if (dupCheck.isDuplicate) {
+            logStep(sessionId, 'Negotiator', 'duplicate_check', 'done', '', 'Conflict found');
+            return {
+                status: 'conflict',
+                message: dupCheck.conflictMessage,
+                session_id: sessionId,
+            };
+        }
+        logStep(sessionId, 'Negotiator', 'duplicate_check', 'done', '', 'No conflicts — clear');
+    }
+
     logStep(sessionId, 'Gatekeeper', 'saving_listing', 'running', '', '');
     const savedListing = await saveListing(parsedData, senderAgentId);
     logStep(sessionId, 'Gatekeeper', 'saving_listing', 'done', '', `ID: ${savedListing.id}`);
 
     await checkAndFlagHotProperty(savedListing);
 
+    let matchesCount = 0;
     if (parsedData.is_public) {
         logStep(sessionId, 'Matchmaker', 'scanning_requests', 'running', '', '');
-        findAndNotifyMatches(savedListing)
-            .then(matches =>
-                logStep(sessionId, 'Matchmaker', 'scanning_requests', 'done', '',
-                    `${matches.length} match(es) notified`
-                )
-            )
-            .catch(err => console.error('[Matchmaker] Error:', err.message));
+        try {
+            const matches = await findAndNotifyMatches(savedListing);
+            matchesCount = matches.length;
+            logStep(sessionId, 'Matchmaker', 'scanning_requests', 'done', '', `${matchesCount} match(es) notified`);
+        } catch (err) {
+            console.error('[Matchmaker] Error:', err.message);
+        }
     }
 
     logStep(sessionId, 'Orchestrator', 'complete', 'done', '', `Listing saved: ${savedListing.id}`);
-    return savedListing;
+    return {
+        ...savedListing,
+        matches_count: matchesCount
+    };
 }
 
 // ── Hot Property Calculator ─────────────────────────────

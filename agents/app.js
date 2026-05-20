@@ -32,8 +32,11 @@ app.post('/api/message', async (req, res) => {
 app.post('/api/confirm', async (req, res) => {
     try {
         const { parsed_data, sender_agent_id, session_id } = req.body
-        const savedListing = await confirmAndSave(parsed_data, sender_agent_id, session_id)
-        res.json({ status: 'listing_saved', listing: savedListing })
+        const result = await confirmAndSave(parsed_data, sender_agent_id, session_id)
+        if (result.status === 'conflict') {
+            return res.json(result);
+        }
+        res.json({ status: 'listing_saved', listing: result, matches_count: result.matches_count || 0 })
     } catch (err) {
         console.error('[Confirm] Error:', err.message)
         res.status(500).json({ error: err.message })

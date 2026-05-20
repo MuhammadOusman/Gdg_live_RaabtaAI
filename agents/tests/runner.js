@@ -132,6 +132,27 @@ async function runTests() {
     assert('Duplicate check flags duplicate: true', identDup.isDuplicate === true);
     assert('Duplicate check includes conflictMessage', identDup.conflictMessage !== undefined);
 
+    console.log('Running: Same-agent duplicate listing detection...');
+    const sameAgentDup = await checkDuplicates({
+        block_id: 'North Nazimabad Block N',
+        size: 400,
+        unit: 'gaz',
+        demand_price: 42000000,
+        is_public: true
+    }, 'test_agent_other');
+    assert('Duplicate check flags same-agent duplicate: true', sameAgentDup.isDuplicate === true);
+
+    console.log('Running: confirmAndSave duplicate blocking...');
+    const dupConfirmRes = await confirmAndSave({
+        block_id: 'North Nazimabad Block N',
+        size: 400,
+        unit: 'gaz',
+        demand_price: 42000000,
+        is_public: true
+    }, 'test_agent_supply', randomUUID());
+    assert('confirmAndSave returns conflict status', dupConfirmRes.status === 'conflict');
+    assert('confirmAndSave includes conflict message', dupConfirmRes.message !== undefined);
+
     console.log('Running: Unit-normalized duplicate detection (10 marla vs 450gz)...');
     // 10 marla = 450gz. Let's insert a 450gz listing
     const { data: marlaListing } = await supabase.from('listings').insert([{

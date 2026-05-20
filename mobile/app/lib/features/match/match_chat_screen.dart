@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 
 import 'chat_controller.dart';
 import 'models/chat_message.dart';
-import 'services/voice_note_player.dart';
 
 class MatchChatScreen extends StatelessWidget {
   const MatchChatScreen({super.key});
@@ -27,11 +26,10 @@ class _MatchChatBody extends StatefulWidget {
 }
 
 class _MatchChatBodyState extends State<_MatchChatBody> {
-  static const double _bottomOffset = 110;
+  static const double _bottomOffset = 88;
 
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final VoiceNotePlayer _voicePlayer = const VoiceNotePlayer();
 
   @override
   void dispose() {
@@ -76,7 +74,6 @@ class _MatchChatBodyState extends State<_MatchChatBody> {
                               padding: const EdgeInsets.only(bottom: 12),
                               child: _ChatBubble(
                                 message: message,
-                                player: _voicePlayer,
                               ),
                             );
                           },
@@ -120,9 +117,6 @@ class _MatchChatBodyState extends State<_MatchChatBody> {
       await controller.stopRecording();
     } else {
       await controller.startRecording();
-    }
-    if (mounted) {
-      setState(() {});
     }
   }
 }
@@ -186,7 +180,7 @@ class _ChatHeader extends StatelessWidget {
   }
 }
 
-class _Composer extends StatelessWidget {
+class _Composer extends StatefulWidget {
   const _Composer({
     required this.textController,
     required this.focusNode,
@@ -200,11 +194,117 @@ class _Composer extends StatelessWidget {
   final Future<void> Function() onMicPressed;
 
   @override
+  State<_Composer> createState() => _ComposerState();
+}
+
+class _ComposerState extends State<_Composer> with SingleTickerProviderStateMixin {
+  late AnimationController _pulsingController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulsingController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulsingController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final controller = context.watch<ChatController>();
+    final isRecording = controller.isRecording;
+    final duration = controller.recordingDuration;
+
+    if (isRecording) {
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF11151A).withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 28,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+        child: Row(
+          children: [
+            // Trash/Cancel Button
+            IconButton(
+              onPressed: () async {
+                await controller.cancelRecording();
+              },
+              icon: const Icon(Icons.delete_outline_rounded),
+              color: Colors.redAccent,
+              tooltip: 'Cancel recording',
+            ),
+            const SizedBox(width: 8),
+            // Recording indicator & Time
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ScaleTransition(
+                  scale: Tween<double>(begin: 0.8, end: 1.2).animate(
+                    CurvedAnimation(parent: _pulsingController, curve: Curves.easeInOut),
+                  ),
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _formatDurationSeconds(duration),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Text(
+                'Recording audio...',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 14,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+            // Stop & Send Button
+            _ActionButton(
+              color: const Color(0xFF24B15E),
+              icon: Icons.send_rounded,
+              onTap: () async {
+                await controller.stopRecording();
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
     return AnimatedBuilder(
-      animation: textController,
+      animation: widget.textController,
       builder: (context, _) {
-        final hasText = textController.text.trim().isNotEmpty;
+        final hasText = widget.textController.text.trim().isNotEmpty;
         return Container(
           decoration: BoxDecoration(
             color: const Color(0xFF11151A).withValues(alpha: 0.96),
@@ -229,12 +329,12 @@ class _Composer extends StatelessWidget {
               ),
               Expanded(
                 child: TextField(
-                  controller: textController,
-                  focusNode: focusNode,
+                  controller: widget.textController,
+                  focusNode: widget.focusNode,
                   maxLines: 4,
                   minLines: 1,
                   textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => onSend(),
+                  onSubmitted: (_) => widget.onSend(),
                   style: const TextStyle(color: Colors.white, fontSize: 15),
                   decoration: InputDecoration(
                     hintText: 'Type a message',
@@ -252,7 +352,7 @@ class _Composer extends StatelessWidget {
                         key: const ValueKey('send'),
                         color: const Color(0xFF4A90E2),
                         icon: Icons.send_rounded,
-                        onTap: onSend,
+                        onTap: widget.onSend,
                       )
                     : Row(
                         key: const ValueKey('voice'),
@@ -267,7 +367,7 @@ class _Composer extends StatelessWidget {
                           _ActionButton(
                             color: const Color(0xFF24B15E),
                             icon: Icons.mic_rounded,
-                            onTap: onMicPressed,
+                            onTap: widget.onMicPressed,
                           ),
                         ],
                       ),
@@ -277,6 +377,12 @@ class _Composer extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _formatDurationSeconds(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 }
 
@@ -306,10 +412,9 @@ class _ActionButton extends StatelessWidget {
 }
 
 class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({required this.message, required this.player});
+  const _ChatBubble({required this.message});
 
   final ChatMessage message;
-  final VoiceNotePlayer player;
 
   @override
   Widget build(BuildContext context) {
@@ -342,7 +447,6 @@ class _ChatBubble extends StatelessWidget {
           child: _BubbleBody(
             message: message,
             isMe: isMe,
-            player: player,
           ),
         ),
       ),
@@ -351,11 +455,10 @@ class _ChatBubble extends StatelessWidget {
 }
 
 class _BubbleBody extends StatelessWidget {
-  const _BubbleBody({required this.message, required this.isMe, required this.player});
+  const _BubbleBody({required this.message, required this.isMe});
 
   final ChatMessage message;
   final bool isMe;
-  final VoiceNotePlayer player;
 
   @override
   Widget build(BuildContext context) {
@@ -444,68 +547,10 @@ class _BubbleBody extends StatelessWidget {
     }
 
     if (message.type == MessageType.audio) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.black.withValues(alpha: 0.25),
-              child: IconButton(
-                padding: EdgeInsets.zero,
-                onPressed: message.audioPath == null
-                    ? null
-                    : () async {
-                        await player.play(message.audioPath!);
-                      },
-                icon: Icon(
-                  Icons.play_arrow_rounded,
-                  color: message.audioPath == null ? Colors.white38 : Colors.white,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: List.generate(
-                      16,
-                      (index) => Padding(
-                        padding: const EdgeInsets.only(right: 3),
-                        child: Container(
-                          width: 2,
-                          height: 6 + ((index % 5) * 2).toDouble(),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.42),
-                            borderRadius: BorderRadius.circular(99),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    message.text ?? 'Voice note',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              timestamp,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-          ],
-        ),
+      return _VoiceNoteBubble(
+        message: message,
+        timestamp: timestamp,
+        isMe: isMe,
       );
     }
 
@@ -524,6 +569,238 @@ class _BubbleBody extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _VoiceNoteBubble extends StatelessWidget {
+  const _VoiceNoteBubble({
+    required this.message,
+    required this.timestamp,
+    required this.isMe,
+  });
+
+  final ChatMessage message;
+  final String timestamp;
+  final bool isMe;
+
+  @override
+  Widget build(BuildContext context) {
+    final canPlay = message.audioPath != null;
+    final accent = isMe ? Colors.white : const Color(0xFF6EE7B7);
+    final foreground = isMe ? Colors.white : Colors.white.withValues(alpha: 0.92);
+
+    return Selector<ChatController, AudioPlaybackState>(
+      selector: (context, controller) {
+        final isCurrent = controller.playingMessageId == message.id;
+        return AudioPlaybackState(
+          isPlaying: isCurrent && controller.isPlayingAudio,
+          position: isCurrent ? controller.audioPosition : Duration.zero,
+          duration: isCurrent ? controller.audioDuration : Duration.zero,
+        );
+      },
+      builder: (context, playbackState, child) {
+        final isPlayingThis = playbackState.isPlaying;
+        final position = playbackState.position;
+        final duration = playbackState.duration;
+
+        double progress = 0.0;
+        if (duration.inMilliseconds > 0) {
+          progress = (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+        }
+
+        String timeStr;
+        if (isPlayingThis || position > Duration.zero) {
+          timeStr = '${_formatDuration(position)} / ${_formatDuration(duration)}';
+        } else {
+          timeStr = message.text != null && message.text != 'Voice note'
+              ? message.text!
+              : 'Voice note';
+        }
+
+        return SizedBox(
+          width: 280,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Play/Pause Button
+                    Material(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: canPlay
+                            ? () {
+                                context.read<ChatController>().playAudio(message.id, message.audioPath!);
+                              }
+                            : null,
+                        child: SizedBox(
+                          height: 38,
+                          width: 38,
+                          child: Icon(
+                            isPlayingThis ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                            color: canPlay ? accent : Colors.white38,
+                            size: 26,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Waveform with scrubbing capabilities
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final width = constraints.maxWidth;
+                              return GestureDetector(
+                                onTapDown: (details) {
+                                  if (!canPlay) return;
+                                  final dx = details.localPosition.dx;
+                                  final pct = (dx / width).clamp(0.0, 1.0);
+                                  if (duration > Duration.zero) {
+                                    context.read<ChatController>().seekAudio(duration * pct);
+                                  }
+                                },
+                                onHorizontalDragUpdate: (details) {
+                                  if (!canPlay) return;
+                                  final dx = details.localPosition.dx;
+                                  final pct = (dx / width).clamp(0.0, 1.0);
+                                  if (duration > Duration.zero) {
+                                    context.read<ChatController>().seekAudio(duration * pct);
+                                  }
+                                },
+                                child: SizedBox(
+                                  height: 28,
+                                  child: CustomPaint(
+                                    painter: _VoiceWaveformPainter(
+                                      color: foreground.withValues(alpha: canPlay ? 0.25 : 0.15),
+                                      progressColor: accent.withValues(alpha: 0.95),
+                                      progress: progress,
+                                    ),
+                                    child: const SizedBox.expand(),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            timeStr,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: foreground.withValues(alpha: 0.65),
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 11,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Avatar with Microphone Badge
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: Colors.white.withValues(alpha: 0.12),
+                          child: Icon(
+                            Icons.person_rounded,
+                            color: foreground.withValues(alpha: 0.7),
+                            size: 20,
+                          ),
+                        ),
+                        Positioned(
+                          right: -3,
+                          bottom: -3,
+                          child: Container(
+                            padding: const EdgeInsets.all(2.5),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF24B15E),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.mic_rounded,
+                              size: 10,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _MessageFooter(timestamp: timestamp, isMe: isMe),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _VoiceWaveformPainter extends CustomPainter {
+  const _VoiceWaveformPainter({
+    required this.color,
+    required this.progressColor,
+    required this.progress,
+  });
+
+  final Color color;
+  final Color progressColor;
+  final double progress;
+
+  static const List<double> _levels = [
+    0.28, 0.55, 0.36, 0.76, 0.48, 0.92, 0.62, 0.42, 0.82, 0.34,
+    0.68, 0.96, 0.52, 0.74, 0.38, 0.58, 0.86, 0.46, 0.72, 0.4,
+    0.64, 0.88, 0.5, 0.32,
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final inactivePaint = Paint()
+      ..color = color
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 3;
+    final activePaint = Paint()
+      ..color = progressColor
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 3;
+
+    final spacing = size.width / (_levels.length - 1);
+    final centerY = size.height / 2;
+    final activeCount = (progress * _levels.length).round();
+
+    for (var i = 0; i < _levels.length; i++) {
+      final x = i * spacing;
+      final height = (size.height * _levels[i]).clamp(5.0, size.height);
+      final paint = i < activeCount ? activePaint : inactivePaint;
+      canvas.drawLine(
+        Offset(x, centerY - height / 2),
+        Offset(x, centerY + height / 2),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _VoiceWaveformPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.progressColor != progressColor ||
+        oldDelegate.progress != progress;
   }
 }
 
@@ -655,3 +932,34 @@ String _formatTime(DateTime timestamp) {
   final suffix = timestamp.hour >= 12 ? 'PM' : 'AM';
   return '$hour:$minute $suffix';
 }
+
+String _formatDuration(Duration duration) {
+  final minutes = duration.inMinutes;
+  final seconds = duration.inSeconds % 60;
+  return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+}
+
+class AudioPlaybackState {
+  final bool isPlaying;
+  final Duration position;
+  final Duration duration;
+
+  AudioPlaybackState({
+    required this.isPlaying,
+    required this.position,
+    required this.duration,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AudioPlaybackState &&
+          runtimeType == other.runtimeType &&
+          isPlaying == other.isPlaying &&
+          position == other.position &&
+          duration == other.duration;
+
+  @override
+  int get hashCode => isPlaying.hashCode ^ position.hashCode ^ duration.hashCode;
+}
+

@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "app.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app.js"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/janitor/run",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/recommender/run",
+      "schedule": "0 5 * * 0"
+    }
+  ]
+}

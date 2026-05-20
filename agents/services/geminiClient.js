@@ -1,11 +1,32 @@
 import { GoogleGenAI } from '@google/genai';
 import 'dotenv/config';
+import fs from 'fs';
 
-const ai = new GoogleGenAI({
-    vertexai: true,
-    project: process.env.GOOGLE_CLOUD_PROJECT,
-    location: 'us-central1',
-});
+// Dynamically write GCP Service Account credentials on serverless environments if provided
+const serviceAccountJson = process.env.GCP_SERVICE_ACCOUNT_JSON || process.env.GCP_SERVICE_ACCOUNT_KEY;
+if (serviceAccountJson) {
+    try {
+        const credsPath = '/tmp/gcp-creds.json';
+        fs.writeFileSync(credsPath, serviceAccountJson);
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = credsPath;
+        console.log('[Gemini Client] Wrote GCP credentials from environment service account JSON');
+    } catch (err) {
+        console.error('[Gemini Client] Failed writing GCP credentials:', err.message);
+    }
+}
+
+let ai;
+if (process.env.GEMINI_API_KEY) {
+    console.log('[Gemini Client] Initializing standard Gemini Developer API...');
+    ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+} else {
+    console.log('[Gemini Client] Initializing GCP Vertex AI...');
+    ai = new GoogleGenAI({
+        vertexai: true,
+        project: process.env.GOOGLE_CLOUD_PROJECT || 'sonic-diorama-474318-f5',
+        location: 'us-central1',
+    });
+}
 
 const RETRY_DELAYS_MS = [500, 1000]; // 2 retries: 500ms then 1000ms
 

@@ -16,6 +16,7 @@ export function requireAuth(req, res, next) {
         // const payload = jwt.verify(token, JWT_SECRET, { audience: 'authenticated' });
         const payload = jwt.verify(token, JWT_SECRET);
         req.agent = { agent_id: payload.agent_id || payload.sub };
+        req.agentId = payload.agent_id || payload.sub;
         next();
     } catch (err) {
         if (err.name === 'TokenExpiredError') {

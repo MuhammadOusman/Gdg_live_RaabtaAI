@@ -20,6 +20,7 @@ class DashboardController extends ChangeNotifier {
 
   final DashboardRepository _repository;
   final List<ListingRecord> _remoteListings = [];
+  final List<ListingRecord> _myListings = [];
   final List<BlockMarketStat> _blockStats = [];
   final List<MatchLead> _matchLeads = [];
   final List<LeaderboardEntry> _leaderboard = [];
@@ -92,10 +93,13 @@ class DashboardController extends ChangeNotifier {
       .toList(growable: false)
     ..sort((a, b) => b.demandRatio.compareTo(a.demandRatio));
 
+  /// My own listings — fetched from /api/listings/my
+  List<ListingRecord> get myListings => List.unmodifiable(_myListings);
+
   /// Vault listings — all active listings (private or public) for the agent
   List<ListingRecord> get vaultListings {
     // Show ALL listings regardless of work area filter for the vault
-    final all = _remoteListings.map((listing) {
+    final all = _myListings.map((listing) {
       final mergedVisibility = _visibilityOverrides[listing.id] ?? listing.visibility;
       final mergedStatus = _archivedListingIds.contains(listing.id)
           ? ListingStatus.archived
@@ -116,6 +120,21 @@ class DashboardController extends ChangeNotifier {
 
   List<MatchLead> get matchLeads => _matchLeads;
   List<Request> get requests => _requests.where((r) => r.status == 'searching').toList(growable: false);
+
+  /// Fetch the current agent's own listings
+  Future<void> fetchMyListings() async {
+    try {
+      final data = await _repository.fetchAgentListings('');
+      if (data.isNotEmpty) {
+        _myListings
+          ..clear()
+          ..addAll(data);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error fetching my listings: $e');
+    }
+  }
 
   /// Fetch the current agent's requests
   Future<void> fetchRequests() async {
@@ -195,12 +214,17 @@ class DashboardController extends ChangeNotifier {
 
   void setTabIndex(int value) {
     _tabIndex = value;
+    if (value == 1) {
+      // Vault tab selected — fetch my listings
+      fetchMyListings();
+    }
     notifyListeners();
   }
 
   void setVaultFilter(ListingVisibility value) {
     _vaultFilter = value;
     _showRequests = false;
+    fetchMyListings();
     notifyListeners();
   }
 
@@ -227,22 +251,29 @@ class DashboardController extends ChangeNotifier {
 
   void markSold(String listingId) {
     _archivedListingIds.add(listingId);
+    _repository.markListingSold(listingId);
     showToast('✅ Archived as sold.');
+    fetchMyListings();
     notifyListeners();
   }
 
   void togglePublicPrivate(String listingId) {
-    final listingIndex = _remoteListings.indexWhere((item) => item.id == listingId);
+    int listingIndex = _myListings.indexWhere((item) => item.id == listingId);
     if (listingIndex == -1) {
-      return;
+      listingIndex = _remoteListings.indexWhere((item) => item.id == listingId);
+      if (listingIndex == -1) return;
     }
 
-    final listing = _remoteListings[listingIndex];
+    final listing = _myListings.isNotEmpty && _myListings.any((l) => l.id == listingId)
+        ? _myListings[listingIndex]
+        : _remoteListings[listingIndex];
     final next = (_visibilityOverrides[listing.id] ?? listing.visibility) == ListingVisibility.private
         ? ListingVisibility.public
         : ListingVisibility.private;
     _visibilityOverrides[listing.id] = next;
+    _repository.toggleListingVisibility(listingId, next == ListingVisibility.public);
     showToast('🔄 Switched to ${next.name.toUpperCase()}.');
+    fetchMyListings();
     notifyListeners();
   }
 

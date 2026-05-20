@@ -114,9 +114,50 @@ class ListingCard extends StatelessWidget {
                 ),
                 if (!compact) ...[
                   const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          listing.sublocation.isNotEmpty ? listing.sublocation : listing.workArea,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: listing.visibility == ListingVisibility.public
+                              ? RaabtaTheme.emeraldGreen.withValues(alpha: 0.12)
+                              : Colors.white.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              listing.visibility == ListingVisibility.public ? Icons.public : Icons.lock,
+                              size: 14,
+                              color: Colors.white70,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              listing.visibility == ListingVisibility.public ? 'PUBLIC' : 'PRIVATE',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white70, fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   Text(
-                    listing.notesSnippet,
-                    maxLines: 2,
+                    listing.notes.isNotEmpty ? listing.notes : listing.notesSnippet,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.white.withValues(alpha: 0.82),

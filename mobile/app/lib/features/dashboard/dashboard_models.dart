@@ -8,6 +8,8 @@ class ListingRecord {
     required this.priceLabel,
     required this.sizeLabel,
     required this.notesSnippet,
+    required this.sublocation,
+    required this.notes,
     this.latitude,
     this.longitude,
     required this.signalTone,
@@ -23,6 +25,8 @@ class ListingRecord {
   final String priceLabel;
   final String sizeLabel;
   final String notesSnippet;
+  final String sublocation;
+  final String notes;
   final double? latitude;
   final double? longitude;
   final ListingTone signalTone;
@@ -40,6 +44,8 @@ class ListingRecord {
     String? priceLabel,
     String? sizeLabel,
     String? notesSnippet,
+    String? sublocation,
+    String? notes,
     double? latitude,
     double? longitude,
     ListingTone? signalTone,
@@ -55,6 +61,8 @@ class ListingRecord {
       priceLabel: priceLabel ?? this.priceLabel,
       sizeLabel: sizeLabel ?? this.sizeLabel,
       notesSnippet: notesSnippet ?? this.notesSnippet,
+      sublocation: sublocation ?? this.sublocation,
+      notes: notes ?? this.notes,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       signalTone: signalTone ?? this.signalTone,
@@ -72,8 +80,10 @@ class ListingRecord {
       blockName: (json['block_name'] ?? json['blockName'] ?? 'Block') as String,
       priceLabel: (json['price_label'] ?? json['priceLabel'] ?? '—') as String,
       sizeLabel: (json['size_label'] ?? json['sizeLabel'] ?? '—') as String,
-      notesSnippet:
+        notesSnippet:
           (json['notes_snippet'] ?? json['notesSnippet'] ?? 'No notes') as String,
+        sublocation: (json['sub_location'] ?? json['subLocation'] ?? '') as String,
+        notes: (json['notes_full'] ?? json['notesFull'] ?? json['notes'] ?? '') as String,
       latitude: _toDouble(json['latitude']),
       longitude: _toDouble(json['longitude']),
       signalTone: ListingToneX.fromValue(
@@ -245,6 +255,8 @@ class DashboardFixtures {
       priceLabel: '4.2 Cr',
       sizeLabel: '120 Sq Yd',
       notesSnippet: 'Owner ready at 4.1, needs a fast close.',
+      sublocation: 'Block N East',
+      notes: 'Owner ready at 4.1, needs a fast close. Contact via mobile; prefers cash deals.',
       latitude: 24.9366,
       longitude: 67.0493,
       signalTone: ListingTone.hot,
@@ -260,6 +272,8 @@ class DashboardFixtures {
       priceLabel: '2.85 Cr',
       sizeLabel: '80 Sq Yd',
       notesSnippet: 'Fresh capture, green-lighted for public.',
+      sublocation: '13D North',
+      notes: 'Fresh capture, green-lighted for public. Owner open to quick visits on weekends.',
       latitude: 24.9225,
       longitude: 67.1247,
       signalTone: ListingTone.newListing,
@@ -275,6 +289,8 @@ class DashboardFixtures {
       priceLabel: '7.9 Cr',
       sizeLabel: '240 Sq Yd',
       notesSnippet: 'Premium corner plot with west-open edge.',
+      sublocation: 'K Sector Corner',
+      notes: 'Premium corner plot with west-open edge. Documents clear; preferred serious buyers only.',
       latitude: 24.945,
       longitude: 67.072,
       signalTone: ListingTone.standard,
@@ -290,6 +306,8 @@ class DashboardFixtures {
       priceLabel: '1.95 Cr',
       sizeLabel: '75 Sq Yd',
       notesSnippet: 'Buyer asked for possession within 30 days.',
+      sublocation: 'Block 9 South',
+      notes: 'Buyer asked for possession within 30 days. Tenant occupied, needs 2-week notice.',
       latitude: 24.895,
       longitude: 67.13,
       signalTone: ListingTone.hot,
@@ -305,6 +323,8 @@ class DashboardFixtures {
       priceLabel: '5.4 Cr',
       sizeLabel: '160 Sq Yd',
       notesSnippet: 'Negotiable if the buyer skips financing.',
+      sublocation: 'Block M West',
+      notes: 'Negotiable if the buyer skips financing. Seller prefers deal closure within 45 days.',
       latitude: 24.929,
       longitude: 67.058,
       signalTone: ListingTone.newListing,
@@ -320,6 +340,8 @@ class DashboardFixtures {
       priceLabel: '3.1 Cr',
       sizeLabel: '100 Sq Yd',
       notesSnippet: 'Archived lead, keep in CRM only.',
+      sublocation: 'Block L Near Park',
+      notes: 'Archived lead, keep in CRM only. Seller decided to postpone listing.',
       latitude: 24.913,
       longitude: 67.086,
       signalTone: ListingTone.standard,

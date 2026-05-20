@@ -51,6 +51,8 @@ class DashboardRepository {
       priceLabel: priceLabel,
       sizeLabel: sizeLabel,
       notesSnippet: notesSnippet,
+      sublocation: listing.subLocationRaw ?? '',
+      notes: listing.notes.isNotEmpty ? listing.notes.join(' \u2014 ') : '',
       latitude: listing.latitude != null && listing.latitude != 0.0 ? listing.latitude! : null,
       longitude: listing.longitude != null && listing.longitude != 0.0 ? listing.longitude! : null,
       signalTone: tone,
@@ -154,6 +156,20 @@ class DashboardRepository {
       }
     }
     return [];
+  }
+
+  /// Toggle a listing's public/private visibility via the API
+  Future<void> toggleListingVisibility(String listingId, bool isPublic) async {
+    if (AppConfig.hasBackend) {
+      await _api.updateListing(listingId, {'is_public': isPublic});
+    }
+  }
+
+  /// Mark a listing as sold/archived via the API
+  Future<void> markListingSold(String listingId) async {
+    if (AppConfig.hasBackend) {
+      await _api.updateListing(listingId, {'status': 'sold'});
+    }
   }
 
   /// Delete a request by ID

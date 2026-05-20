@@ -6,6 +6,7 @@ import 'package:raabta_ai/services/agent_service.dart';
 import 'package:raabta_ai/services/api_service.dart';
 
 import '../../app/app_config.dart';
+import '../../models/request.dart';
 import 'dashboard_models.dart';
 
 class DashboardRepository {
@@ -134,6 +135,31 @@ class DashboardRepository {
     } catch (e) {
       debugPrint('❌ Backend fetch failed, falling back: $e');
       return DashboardFixtures.listings;
+    }
+  }
+
+  /// Fetch the current agent's requests
+  Future<List<Request>> fetchMyRequests() async {
+    if (AppConfig.hasBackend) {
+      try {
+        final raw = await _api.getMyRequests();
+        final records = raw
+            .map((e) => Request.fromJson(e as Map<String, dynamic>))
+            .toList(growable: false)
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        debugPrint('✅ Loaded ${records.length} requests from backend API');
+        return records;
+      } catch (e) {
+        debugPrint('❌ Backend my requests failed, falling back: $e');
+      }
+    }
+    return [];
+  }
+
+  /// Delete a request by ID
+  Future<void> deleteRequest(String id) async {
+    if (AppConfig.hasBackend) {
+      await _api.deleteRequest(id);
     }
   }
 

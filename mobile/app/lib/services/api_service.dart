@@ -133,6 +133,26 @@ class ApiService {
     }
   }
 
+  // --- Requests ---
+  Future<List<dynamic>> getMyRequests() async {
+    await ensureAuthenticated();
+    final url = Uri.parse('${AppConfig.backendUrl}/api/requests/my');
+    final response = await http.get(url, headers: _headers());
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as List<dynamic>;
+    }
+    throw Exception('Failed to load requests: ${response.statusCode}');
+  }
+
+  Future<void> deleteRequest(String id) async {
+    await ensureAuthenticated();
+    final url = Uri.parse('${AppConfig.backendUrl}/api/requests/$id');
+    final response = await http.delete(url, headers: _headers());
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('Failed to delete request: ${response.statusCode}');
+    }
+  }
+
   // --- Notifications (Match Leads) ---
   Future<List<dynamic>> getNotifications() async {
     await ensureAuthenticated();

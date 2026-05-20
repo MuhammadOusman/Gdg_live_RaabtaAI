@@ -1,7 +1,10 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
+import 'dotenv/config';
 import supabase from '../services/supabaseClient.js';
 import { requireAuth } from '../middleware/auth.js';
 
+const JWT_SECRET = process.env.JWT_SECRET;
 const router = express.Router();
 
 router.post('/', requireAuth, async (req, res) => {
@@ -37,12 +40,30 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 router.get('/', async (req, res) => {
-    const { block_id, status, min_size, max_size, min_price, max_price, is_hot, unit, limit = 50, offset = 0 } = req.query;
+    const { block_id, status, min_size, max_size, min_price, max_price, is_hot, unit, limit = 50, offset = 0, is_public } = req.query;
 
     let query = supabase
         .from('listings')
-        .select('id, owner_agent_id, block_id, sub_location_raw, size, unit, features, demand_price, status, is_hot_property, created_at, updated_at, geo_point, notes, agents(name, agency_name, is_verified)')
-        .eq('is_public', true);
+        .select('id, owner_agent_id, block_id, sub_location_raw, size, unit, features, demand_price, status, is_hot_property, created_at, updated_at, geo_point, notes, agents(name, agency_name, is_verified)');
+
+    if (is_public === 'false') {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+        let agentId;
+        try {
+            const payload = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
+            agentId = payload.agent_id || payload.sub;
+        } catch {
+            return res.status(401).json({ error: 'Invalid or expired token' });
+        }
+        query = query
+            .eq('owner_agent_id', agentId)
+            .eq('is_public', false);
+    } else {
+        query = query.eq('is_public', true);
+    }
 
     if (block_id) query = query.eq('block_id', block_id);
     if (status)   query = query.eq('status', status);

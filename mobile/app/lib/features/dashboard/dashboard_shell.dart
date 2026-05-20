@@ -7,6 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../match/match_chat_screen.dart';
 
 import '../../app/app_theme.dart';
+import '../../models/request.dart';
 import 'dashboard_controller.dart';
 import 'dashboard_models.dart';
 import 'listing_card.dart';
@@ -669,10 +670,7 @@ class VaultScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 72, 16, 96),
         child: Consumer<DashboardController>(
           builder: (context, controller, _) {
-            final privateSelected = controller.vaultFilter == ListingVisibility.private;
-            final items = privateSelected
-                ? controller.vaultListings.where((listing) => listing.visibility == ListingVisibility.private).toList(growable: false)
-                : controller.vaultListings.where((listing) => listing.visibility == ListingVisibility.public).toList(growable: false);
+            final showReqs = controller.showRequests;
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -680,57 +678,30 @@ class VaultScreen extends StatelessWidget {
                 Text('The Vault', style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 6),
                 Text(
-                  'Swipe right to archive as sold. Swipe left to flip public/private.',
+                  showReqs
+                      ? 'Swipe right to delete a request.'
+                      : 'Swipe right to archive as sold. Swipe left to flip public/private.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Colors.white70,
                       ),
                 ),
                 const SizedBox(height: 16),
                 _VaultTabs(
-                  privateSelected: privateSelected,
-                  onPrivateTap: () => controller.setVaultFilter(ListingVisibility.private),
-                  onPublicTap: () => controller.setVaultFilter(ListingVisibility.public),
+                  selected: showReqs ? 2 : (controller.vaultFilter == ListingVisibility.private ? 0 : 1),
+                  onTab: (index) {
+                    if (index == 0) {
+                      controller.setVaultFilter(ListingVisibility.private);
+                    } else if (index == 1) {
+                      controller.setVaultFilter(ListingVisibility.public);
+                    } else {
+                      controller.setShowRequests(true);
+                      controller.fetchRequests();
+                    }
+                  },
                 ),
                 const SizedBox(height: 16),
                 Expanded(
-                  child: items.isEmpty
-                      ? const _EmptyState(
-                          title: 'Nothing here yet',
-                          subtitle: 'Try widening your work-area filter or import a private lead.',
-                        )
-                      : ListView.separated(
-                          itemCount: items.length,
-                          separatorBuilder: (context, _) => const SizedBox(height: 14),
-                          itemBuilder: (context, index) {
-                            final listing = items[index];
-                            return Dismissible(
-                              key: ValueKey(listing.id),
-                              background: const _DismissBackground(
-                                color: RaabtaTheme.emeraldGreen,
-                                icon: Icons.archive_rounded,
-                                label: 'SOLD',
-                                alignment: Alignment.centerLeft,
-                              ),
-                              secondaryBackground: _DismissBackground(
-                                color: RaabtaTheme.electricBlue,
-                                icon: Icons.visibility_rounded,
-                                label: listing.visibility == ListingVisibility.private ? 'PUBLIC' : 'PRIVATE',
-                                alignment: Alignment.centerRight,
-                              ),
-                              onDismissed: (direction) {
-                                if (direction == DismissDirection.startToEnd) {
-                                  controller.markSold(listing.id);
-                                } else {
-                                  controller.togglePublicPrivate(listing.id);
-                                }
-                              },
-                              child: ListingCard(
-                                listing: listing,
-                                trailing: _VisibilityBadge(value: listing.visibility),
-                              ),
-                            );
-                          },
-                        ),
+                  child: showReqs ? _buildRequestsList(controller) : _buildListingsList(controller),
                 ),
               ],
             );
@@ -739,18 +710,197 @@ class VaultScreen extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildListingsList(DashboardController controller) {
+    final items = controller.vaultFilter == ListingVisibility.private
+        ? controller.vaultListings.where((l) => l.visibility == ListingVisibility.private).toList(growable: false)
+        : controller.vaultListings.where((l) => l.visibility == ListingVisibility.public).toList(growable: false);
+
+    if (items.isEmpty) {
+      return const _EmptyState(
+        title: 'Nothing here yet',
+        subtitle: 'Try widening your work-area filter or import a private lead.',
+      );
+    }
+
+    return ListView.separated(
+      itemCount: items.length,
+      separatorBuilder: (context, _) => const SizedBox(height: 14),
+      itemBuilder: (context, index) {
+        final listing = items[index];
+        return Dismissible(
+          key: ValueKey(listing.id),
+          background: const _DismissBackground(
+            color: RaabtaTheme.emeraldGreen,
+            icon: Icons.archive_rounded,
+            label: 'SOLD',
+            alignment: Alignment.centerLeft,
+          ),
+          secondaryBackground: _DismissBackground(
+            color: RaabtaTheme.electricBlue,
+            icon: Icons.visibility_rounded,
+            label: listing.visibility == ListingVisibility.private ? 'PUBLIC' : 'PRIVATE',
+            alignment: Alignment.centerRight,
+          ),
+          onDismissed: (direction) {
+            if (direction == DismissDirection.startToEnd) {
+              controller.markSold(listing.id);
+            } else {
+              controller.togglePublicPrivate(listing.id);
+            }
+          },
+          child: ListingCard(
+            listing: listing,
+            trailing: _VisibilityBadge(value: listing.visibility),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRequestsList(DashboardController controller) {
+    final items = controller.requests;
+
+    if (items.isEmpty) {
+      return const _EmptyState(
+        title: 'No active requests',
+        subtitle: 'Your searching requests will appear here.',
+      );
+    }
+
+    return ListView.separated(
+      itemCount: items.length,
+      separatorBuilder: (context, _) => const SizedBox(height: 14),
+      itemBuilder: (context, index) {
+        final req = items[index];
+        return Dismissible(
+          key: ValueKey(req.id),
+          direction: DismissDirection.startToEnd,
+          background: const _DismissBackground(
+            color: RaabtaTheme.signalRed,
+            icon: Icons.delete_rounded,
+            label: 'DELETE',
+            alignment: Alignment.centerLeft,
+          ),
+          onDismissed: (_) => controller.deleteRequest(req.id),
+          child: _RequestCard(request: req),
+        );
+      },
+    );
+  }
+}
+
+class _RequestCard extends StatelessWidget {
+  const _RequestCard({required this.request});
+  final Request request;
+
+  @override
+  Widget build(BuildContext context) {
+    final blocks = request.targetBlocks.join(', ');
+    final features = request.targetFeatures.isNotEmpty ? request.targetFeatures.join(', ') : null;
+    final budget = request.maxBudget != null ? _formatBigInt(request.maxBudget!) : null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: RaabtaTheme.electricBlue.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.search_rounded, size: 18, color: RaabtaTheme.electricBlue),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  blocks.isNotEmpty ? blocks : 'Any block',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              if (request.targetSize != null)
+                _InfoChip(label: '${request.targetSize} ${request.unit}'),
+              if (budget != null)
+                _InfoChip(label: budget),
+              _InfoChip(label: request.status),
+            ],
+          ),
+          if (features != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '✨ $features',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.white54,
+                    fontStyle: FontStyle.italic,
+                  ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatBigInt(int amount) {
+    if (amount >= 10000000) return '${(amount / 10000000).toStringAsFixed(1)} Cr';
+    if (amount >= 100000) return '${(amount / 100000).toStringAsFixed(1)} Lakh';
+    return '$amount';
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.white70,
+              fontWeight: FontWeight.w500,
+            ),
+      ),
+    );
+  }
 }
 
 class _VaultTabs extends StatelessWidget {
   const _VaultTabs({
-    required this.privateSelected,
-    required this.onPrivateTap,
-    required this.onPublicTap,
+    required this.selected,
+    required this.onTab,
   });
 
-  final bool privateSelected;
-  final VoidCallback onPrivateTap;
-  final VoidCallback onPublicTap;
+  final int selected;
+  final ValueChanged<int> onTab;
 
   @override
   Widget build(BuildContext context) {
@@ -765,19 +915,28 @@ class _VaultTabs extends StatelessWidget {
         children: [
           Expanded(
             child: _TabButton(
-              label: 'PRIVATE',
+              label: 'PVT',
               icon: Icons.vpn_key_rounded,
-              selected: privateSelected,
-              onTap: onPrivateTap,
+              selected: selected == 0,
+              onTap: () => onTab(0),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           Expanded(
             child: _TabButton(
-              label: 'PUBLIC',
+              label: 'PUB',
               icon: Icons.storefront_rounded,
-              selected: !privateSelected,
-              onTap: onPublicTap,
+              selected: selected == 1,
+              onTap: () => onTab(1),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _TabButton(
+              label: 'REQ',
+              icon: Icons.search_rounded,
+              selected: selected == 2,
+              onTap: () => onTab(2),
             ),
           ),
         ],

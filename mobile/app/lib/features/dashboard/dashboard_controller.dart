@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../models/request.dart';
 import 'dashboard_models.dart';
 import 'dashboard_repository.dart';
 
@@ -22,6 +23,7 @@ class DashboardController extends ChangeNotifier {
   final List<BlockMarketStat> _blockStats = [];
   final List<MatchLead> _matchLeads = [];
   final List<LeaderboardEntry> _leaderboard = [];
+  final List<Request> _requests = [];
   final Set<String> _selectedWorkAreas = <String>{};
   final Set<String> _archivedListingIds = <String>{};
   final Map<String, ListingVisibility> _visibilityOverrides = <String, ListingVisibility>{};
@@ -34,9 +36,11 @@ class DashboardController extends ChangeNotifier {
   String? _lastNotifiedMatchId;
   int _tabIndex = 0;
   ListingVisibility _vaultFilter = ListingVisibility.private;
+  bool _showRequests = false;
 
   int get tabIndex => _tabIndex;
   ListingVisibility get vaultFilter => _vaultFilter;
+  bool get showRequests => _showRequests;
   String? get toastMessage => _toastMessage;
   List<String> get availableWorkAreas => _repository.getWorkAreas();
   Set<String> get selectedWorkAreas => Set.unmodifiable(_selectedWorkAreas);
@@ -111,6 +115,35 @@ class DashboardController extends ChangeNotifier {
     ..sort((a, b) => b.demandRatio.compareTo(a.demandRatio));
 
   List<MatchLead> get matchLeads => _matchLeads;
+  List<Request> get requests => _requests.where((r) => r.status == 'searching').toList(growable: false);
+
+  /// Fetch the current agent's requests
+  Future<void> fetchRequests() async {
+    try {
+      final data = await _repository.fetchMyRequests();
+      if (data.isNotEmpty) {
+        _requests
+          ..clear()
+          ..addAll(data);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error fetching requests: $e');
+    }
+  }
+
+  /// Delete a request from local state and the database
+  Future<void> deleteRequest(String id) async {
+    try {
+      await _repository.deleteRequest(id);
+      _requests.removeWhere((r) => r.id == id);
+      showToast('🗑 Request deleted');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error deleting request: $e');
+      showToast('Failed to delete request');
+    }
+  }
 
   Future<void> _loadLeaderboard() async {
     try {
@@ -167,6 +200,12 @@ class DashboardController extends ChangeNotifier {
 
   void setVaultFilter(ListingVisibility value) {
     _vaultFilter = value;
+    _showRequests = false;
+    notifyListeners();
+  }
+
+  void setShowRequests(bool value) {
+    _showRequests = value;
     notifyListeners();
   }
 

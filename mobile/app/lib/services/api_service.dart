@@ -27,15 +27,33 @@ class ApiService {
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
-      final body = jsonDecode(response.body);
-      _token = body['token'] as String?;
-      _currentAgent = body['agent'] as Map<String, dynamic>?;
-      debugPrint('Successfully authenticated with backend via legacy login.');
-      return;
+      try {
+        final parsed = jsonDecode(response.body);
+        if (parsed is Map<String, dynamic>) {
+          _token = parsed['token'] as String?;
+          _currentAgent = (parsed['agent'] as Map?)?.cast<String, dynamic>();
+          debugPrint('Successfully authenticated with backend via legacy login.');
+          return;
+        }
+        debugPrint('Login returned non-object JSON: ${response.body}');
+        throw Exception('Invalid login response shape');
+      } catch (e) {
+        debugPrint('Failed to parse JSON from login response: $e');
+        debugPrint('Login response body: ${response.body}');
+        throw Exception('Failed to parse login response: ${response.statusCode}');
+      }
     }
 
-    final body = jsonDecode(response.body);
-    throw Exception(body['error'] ?? 'Failed to log in');
+    // Non-200: try to extract an error message, but fall back to raw body.
+    try {
+      final parsed = jsonDecode(response.body);
+      if (parsed is Map && parsed['error'] != null) {
+        throw Exception(parsed['error'].toString());
+      }
+      throw Exception('Failed to log in: ${response.statusCode} - ${response.body}');
+    } catch (_) {
+      throw Exception('Failed to log in: ${response.statusCode} - ${response.body}');
+    }
   }
 
   Future<void> ensureAuthenticated() async {

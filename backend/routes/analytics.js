@@ -1,7 +1,8 @@
 import express from 'express';
 import supabase from '../services/supabaseClient.js';
 import { requireAuth } from '../middleware/auth.js';
-import { generateRecommendations } from '../../agents/agents/recommender/index.js';
+
+const AGENTS_SERVICE_URL = process.env.AGENTS_SERVICE_URL || process.env.AGENTS_URL || '';
 
 const router = express.Router();
 
@@ -250,11 +251,29 @@ router.get('/recommendations', requireAuth, async (req, res) => {
 // POST /api/analytics/recommendations/run
 router.post('/recommendations/run', requireAuth, async (req, res) => {
     try {
-        const result = await generateRecommendations(req.agentId);
+        if (!AGENTS_SERVICE_URL) {
+            return res.status(500).json({
+                error: 'AGENTS_SERVICE_URL is not configured for recommendation generation',
+            });
+        }
+
+        const response = await fetch(`${AGENTS_SERVICE_URL.replace(/\/$/, '')}/api/recommender/run`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agent_id: req.agentId }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return res.status(response.status).json({
+                error: payload.error || 'Failed to run recommendations',
+            });
+        }
+
         return res.json({
             status: 'success',
             agent_id: req.agentId,
-            recommendations: result?.recommendations || [],
+            recommendations: payload.recommendations || [],
         });
     } catch (err) {
         return res.status(500).json({ error: err.message });

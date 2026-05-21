@@ -2,6 +2,8 @@
 
 [![Tech Stack](https://img.shields.io/badge/Stack-Flutter%20%7C%20Node.js%20%7C%20Gemini%20%7C%20Supabase-blue)](https://github.com/MuhammadOusman/Gdg_live_RaabtaAI)
 [![Market](https://img.shields.io/badge/Market-Karachi%2C%20Pakistan-green)](https://github.com/MuhammadOusman/Gdg_live_RaabtaAI)
+[![Web Demo](https://img.shields.io/badge/Web%20Demo-Vercel-black?logo=vercel)](https://gdg-live-raabta-ai-bp6s.vercel.app)
+[![Agents Backend](https://img.shields.io/badge/Backend-Cloud%20Run-orange?logo=google-cloud)](https://raabta-agents-backend-457934660447.us-central1.run.app)
 
 Raabta AI is a B2B "Invisible MLS" (Multiple Listing Service) designed for the informal real estate economy of Pakistan. It captures the chaos of broker-to-broker WhatsApp groups and transforms it into a structured, visual, and intelligent marketplace.
 
@@ -23,7 +25,7 @@ In Pakistan's real estate market, thousands of brokers communicate via unstructu
 Raabta AI is built with a modern, scalable stack designed for real-time performance and intelligent reasoning.
 
 - **Frontend:** [Flutter](https://flutter.dev/) (Mobile App) with Google Maps SDK (Custom Dark Theme).
-- **Backend/Orchestrator:** [Node.js](https://nodejs.org/) (Express) powering the Agentic Multi-Agent System.
+- **Backend/Orchestrator:** [Node.js](https://nodejs.org/) (Express) powering the Agentic Multi-Agent System (Deployed on [Google Cloud Run](https://raabta-agents-backend-457934660447.us-central1.run.app)).
 - **AI Brain:** [Gemini 1.5 Flash](https://deepmind.google/technologies/gemini/) (via Google Cloud Vertex AI / Google Generative AI SDK).
 - **Database:** [Supabase](https://supabase.com/) (PostgreSQL) + [PostGIS](https://postgis.net/) for spatial intelligence and real-time updates.
 - **WhatsApp Integration:** [whatsapp-web.js](https://wwebjs.dev/) + AI Speech-to-Text (STT) for voice note transcription.

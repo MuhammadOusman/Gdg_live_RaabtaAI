@@ -80,9 +80,13 @@ npm install
 ### 3. Environment Variables Configuration
 Create a `.env.local` file inside the `web/` directory and configure the target Agents API backend URL:
 ```env
-VITE_BACKEND_URL=http://localhost:8080
+# For local development:
+# VITE_BACKEND_URL=http://localhost:8080
+
+# Deployed Production Agents Backend on Google Cloud Run:
+VITE_BACKEND_URL=https://raabta-agents-backend-457934660447.us-central1.run.app
 ```
-> **Note:** The backend api generally runs on port `8080` (orchestrator/agents server) or port `3000` (core database server).
+> **Note:** The backend api is deployed on [Google Cloud Run](https://raabta-agents-backend-457934660447.us-central1.run.app) and runs on port `8080` during local development.
 
 ### 4. Running the Development Server
 ```bash

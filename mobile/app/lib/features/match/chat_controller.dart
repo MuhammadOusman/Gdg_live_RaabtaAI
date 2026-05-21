@@ -32,6 +32,7 @@ class ChatController extends ChangeNotifier {
   StreamSubscription? _completeSub;
   Map<String, dynamic>? _pendingParsed;
   String? _pendingSessionId;
+  String _liveStatus = 'Idle';
 
   ChatController() {
     _initAudioPlayer();
@@ -45,6 +46,7 @@ class ChatController extends ChangeNotifier {
   bool get isPlayingAudio => _isPlayingAudio;
   Duration get audioPosition => _audioPosition;
   Duration get audioDuration => _audioDuration;
+  String get liveStatus => _liveStatus;
 
   final _uuid = const Uuid();
 
@@ -70,6 +72,7 @@ class ChatController extends ChangeNotifier {
   }
 
   Future<void> sendText(String text) async {
+    _liveStatus = 'Queued message';
     final msg = ChatMessage(
       id: _uuid.v4(),
       sender: 'me',
@@ -101,6 +104,8 @@ class ChatController extends ChangeNotifier {
       if ((isPublicConfirm || isPrivateConfirm) &&
           _pendingParsed != null &&
           _pendingSessionId != null) {
+        _liveStatus = 'Sending confirmation to agents backend';
+        notifyListeners();
         final parsed = Map<String, dynamic>.from(_pendingParsed!);
         parsed['is_public'] = isPublicConfirm;
         _pendingParsed = null;
@@ -114,10 +119,14 @@ class ChatController extends ChangeNotifier {
         return;
       }
 
+      _liveStatus = 'Waiting for reply from agents backend';
+      notifyListeners();
       final response = await _apiService.sendMessage(text, source: 'app');
       _handleAgentResponse(response, isConfirmationResponse: false);
     } catch (e) {
       debugPrint('Error sending message to agent: $e');
+      _liveStatus = 'Message stalled: $e';
+      notifyListeners();
     }
   }
 
@@ -190,6 +199,7 @@ class ChatController extends ChangeNotifier {
         type: MessageType.text,
       );
       _messages.insert(0, reply);
+      _liveStatus = 'Reply received';
       notifyListeners();
     }
   }
@@ -216,12 +226,19 @@ class ChatController extends ChangeNotifier {
     if (!_isRecording) return;
     _recordingTimer?.cancel();
     _recordingTimer = null;
+    _liveStatus = 'Transcribing voice note';
+    notifyListeners();
     final path = await _recorder.stop();
     _isRecording = false;
     _recordingDuration = 0;
 
     if (path != null) {
       final transcript = await _transcriber.transcribeVoiceMessage(path);
+      if (transcript.isEmpty) {
+        _liveStatus = 'Voice note saved locally, waiting for transcript';
+      } else {
+        _liveStatus = 'Transcript ready, sending to agents backend';
+      }
       final msg = ChatMessage(
         id: _uuid.v4(),
         sender: 'me',
@@ -235,6 +252,8 @@ class ChatController extends ChangeNotifier {
 
       if (transcript.isNotEmpty) {
         await _processOutgoingText(transcript);
+      } else {
+        notifyListeners();
       }
     }
     notifyListeners();
@@ -247,6 +266,7 @@ class ChatController extends ChangeNotifier {
     await _recorder.stop();
     _isRecording = false;
     _recordingDuration = 0;
+    _liveStatus = 'Recording cancelled';
     notifyListeners();
   }
 

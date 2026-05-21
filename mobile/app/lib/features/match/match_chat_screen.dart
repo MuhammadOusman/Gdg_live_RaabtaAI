@@ -59,6 +59,19 @@ class _MatchChatBodyState extends State<_MatchChatBody> {
                     onBack: () {},
                     onMenu: () {},
                   ),
+                  const SizedBox(height: 6),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Consumer<ChatController>(
+                      builder: (context, controller, _) {
+                        return _LiveDebugBar(
+                          label: 'Live debugger',
+                          text: controller.liveStatus,
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Expanded(
                     child: Consumer<ChatController>(
                       builder: (context, controller, _) {
@@ -173,6 +186,50 @@ class _ChatHeader extends StatelessWidget {
             onPressed: onMenu,
             icon: const Icon(Icons.more_vert_rounded),
             color: Colors.white,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LiveDebugBar extends StatelessWidget {
+  const _LiveDebugBar({required this.label, required this.text});
+
+  final String label;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFF11151A).withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Color(0xFF4A90E2),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$label: $text',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
           ),
         ],
       ),

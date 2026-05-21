@@ -79,7 +79,7 @@ class ApiService {
     String source = 'app',
   }) async {
     await ensureAuthenticated();
-    final url = Uri.parse('${AppConfig.backendUrl}/api/message');
+    final url = Uri.parse('${AppConfig.agentsBackendUrl}/api/message');
     final response = await http.post(
       url,
       headers: _headers(),
@@ -101,7 +101,7 @@ class ApiService {
     required String sessionId,
   }) async {
     await ensureAuthenticated();
-    final url = Uri.parse('${AppConfig.backendUrl}/api/confirm');
+    final url = Uri.parse('${AppConfig.agentsBackendUrl}/api/confirm'); /////
     final response = await http.post(
       url,
       headers: _headers(),

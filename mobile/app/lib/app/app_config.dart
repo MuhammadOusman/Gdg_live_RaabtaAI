@@ -8,6 +8,7 @@ class AppConfig {
   static String supabaseUrl = '';
   static String supabaseAnonKey = '';
   static String backendUrl = '';
+  static String agentsBackendUrl = '';
   static String agentPhone = '';
   static String agentName = '';
 
@@ -34,6 +35,16 @@ class AppBootstrap {
         } catch (_) {}
       }
       AppConfig.backendUrl = backend;
+      // Agents backend can be a separate service; fall back to main backend when not set.
+      String agentsBackend = dotenv.env['AGENTS_BACKEND_URL'] ?? backend;
+      if (!kIsWeb) {
+        try {
+          if (Platform.isAndroid && (agentsBackend.contains('localhost') || agentsBackend.contains('127.0.0.1'))) {
+            agentsBackend = agentsBackend.replaceAll('localhost', '10.0.2.2').replaceAll('127.0.0.1', '10.0.2.2');
+          }
+        } catch (_) {}
+      }
+      AppConfig.agentsBackendUrl = agentsBackend;
       AppConfig.agentPhone = dotenv.env['AGENT_PHONE'] ?? '+923001234567';
       AppConfig.agentName = dotenv.env['AGENT_NAME'] ?? 'Muhammad Ousman';
 

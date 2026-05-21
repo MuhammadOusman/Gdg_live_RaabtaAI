@@ -46,11 +46,17 @@ class DashboardController extends ChangeNotifier {
   int _tabIndex = 0;
   ListingVisibility _vaultFilter = ListingVisibility.private;
   bool _showRequests = false;
+  bool _recommendationLoading = false;
+  String _recommendationStatus = 'Recommender idle';
+  String? _recommendationError;
 
   int get tabIndex => _tabIndex;
   ListingVisibility get vaultFilter => _vaultFilter;
   bool get showRequests => _showRequests;
   String? get toastMessage => _toastMessage;
+  bool get recommendationLoading => _recommendationLoading;
+  String get recommendationStatus => _recommendationStatus;
+  String? get recommendationError => _recommendationError;
   List<String> get availableWorkAreas => _repository.getWorkAreas();
   Set<String> get selectedWorkAreas => Set.unmodifiable(_selectedWorkAreas);
   List<LeaderboardEntry> get leaderboard => List.unmodifiable(_leaderboard);
@@ -224,6 +230,12 @@ class DashboardController extends ChangeNotifier {
   }
 
   Future<void> fetchRecommendations({bool runAgent = false}) async {
+    _recommendationLoading = true;
+    _recommendationError = null;
+    _recommendationStatus = runAgent
+        ? 'Running recommender...'
+        : 'Loading recommendations...';
+    notifyListeners();
     try {
       final data = runAgent
           ? await _repository.runAndFetchRecommendations()
@@ -231,9 +243,17 @@ class DashboardController extends ChangeNotifier {
       _recommendations
         ..clear()
         ..addAll(data);
+      _recommendationStatus = data.isEmpty
+          ? 'No recommendations returned yet'
+          : 'Recommendations updated';
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading recommendations: $e');
+      _recommendationError = e.toString();
+      _recommendationStatus = 'Recommender error';
+    } finally {
+      _recommendationLoading = false;
+      notifyListeners();
     }
   }
 

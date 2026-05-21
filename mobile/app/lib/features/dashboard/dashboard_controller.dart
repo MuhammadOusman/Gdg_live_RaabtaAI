@@ -245,7 +245,7 @@ class DashboardController extends ChangeNotifier {
         ..addAll(data);
       _recommendationStatus = data.isEmpty
           ? 'No recommendations returned yet'
-          : 'Recommendations updated';
+          : 'Recommendations updated: ${data.length} items';
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading recommendations: $e');

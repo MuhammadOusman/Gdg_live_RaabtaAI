@@ -404,7 +404,15 @@ class DashboardRepository {
   Future<List<RecommendationEntry>> runAndFetchRecommendations() async {
     if (!AppConfig.hasBackend) return [];
     try {
-      await _api.runRecommendations();
+      final raw = await _api.runRecommendations();
+      final live = raw
+          .map((e) => RecommendationEntry.fromJson(e as Map<String, dynamic>))
+          .toList(growable: false)
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      if (live.isNotEmpty) {
+        return live;
+      }
     } catch (e) {
       debugPrint('Error running recommendations: $e');
     }

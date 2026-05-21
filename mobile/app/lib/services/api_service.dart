@@ -101,7 +101,7 @@ class ApiService {
     required String sessionId,
   }) async {
     await ensureAuthenticated();
-    final url = Uri.parse('${AppConfig.agentsBackendUrl}/api/confirm'); /////
+    final url = Uri.parse('${AppConfig.agentsBackendUrl}/api/confirm');
     final response = await http.post(
       url,
       headers: _headers(),
@@ -323,9 +323,13 @@ class ApiService {
     await ensureAuthenticated();
     final agent = Uri.encodeQueryComponent(_resolveSenderAgentId());
     final url = Uri.parse(
-      '${AppConfig.backendUrl}/api/recommender/run?agent_id=$agent',
+      '${AppConfig.backendUrl}/api/analytics/recommendations/run?agent_id=$agent',
     );
-    final response = await http.get(url, headers: _headers());
+    final response = await http.post(
+      url,
+      headers: _headers(),
+      body: jsonEncode(<String, dynamic>{}),
+    );
     if (response.statusCode == 200) {
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
       final recs = decoded['recommendations'];

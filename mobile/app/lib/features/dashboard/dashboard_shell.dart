@@ -1290,24 +1290,15 @@ class InsightsScreen extends StatelessWidget {
                   _LiveDebugBanner(
                     label: 'Recommender live debugger',
                     text: controller.recommendationStatus,
+                    details: controller.recommendationError,
+                    isLoading: controller.recommendationLoading,
                     accent: controller.recommendationError != null
                         ? Colors.redAccent
                         : controller.recommendationLoading
                         ? const Color(0xFF4A90E2)
                         : const Color(0xFF24B15E),
+                    trailingText: '${controller.recommendations.length} items',
                   ),
-                  if (controller.recommendationError != null &&
-                      controller.recommendationError!.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      controller.recommendationError!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.redAccent,
-                          ),
-                    ),
-                  ],
                   const SizedBox(height: 12),
                 _SectionCard(
                   title: 'AI Recommendations',
@@ -1538,40 +1529,99 @@ class _LiveDebugBanner extends StatelessWidget {
   const _LiveDebugBanner({
     required this.label,
     required this.text,
+    required this.details,
+    required this.isLoading,
     required this.accent,
+    required this.trailingText,
   });
 
   final String label;
   final String text;
+  final String? details;
+  final bool isLoading;
   final Color accent;
+  final String trailingText;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-          ),
+          if (isLoading)
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(accent),
+              ),
+            )
+          else
+            Container(
+              width: 8,
+              height: 8,
+              margin: const EdgeInsets.only(top: 5),
+              decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+            ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              '$label: $text',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w600,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.white54,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      trailingText,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Colors.white54,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                if (details != null && details!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    details!,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.redAccent,
+                        ),
                   ),
+                ],
+              ],
             ),
           ),
         ],

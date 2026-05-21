@@ -100,6 +100,15 @@ function buildPayload(message, text, sender) {
   };
 }
 
+function formatMatchListings(matches) {
+  return matches.map((l, i) => {
+    const price = (l.demand_price / 10000000).toFixed(1);
+    const feats = l.features?.length > 0 ? ` • ${l.features.join(', ')}` : '';
+    const loc = l.sub_location_raw ? ` (${l.sub_location_raw})` : '';
+    return `${i + 1}️⃣ ${l.size}gz in ${l.block_id}${loc}${feats} — PKR ${price} Cr`;
+  }).join('\n');
+}
+
 function createWhatsAppApi(options = {}) {
   const emitter = new EventEmitter();
   const geminiKey = options.geminiApiKey || process.env.GEMINI_API_KEY || '';
@@ -149,7 +158,6 @@ function createWhatsAppApi(options = {}) {
 
   client.on('message', async (message) => {
     try {
-      // 🚫 CRITICAL FIX: Ignore all group chats and status broadcasts
       const isGroup = message.from.includes('@g.us') || (message.chat && message.chat.isGroup);
       if (isGroup || message.from === 'status@broadcast' || message.fromMe) {
           return;
@@ -192,10 +200,8 @@ if (require.main === module) {
   console.log('🚀 Starting WhatsApp API (Restoring original state)...');
   console.log(`📡 Connecting to Agents Backend at: ${BACKEND_URL}`);
 
-  // In-memory state machine to track users waiting for confirmation
   const pendingConfirms = new Map();
 
-  // ── SYNC AGENTS (BACKEND) WITH WHATSAPP ─────────────────────
   api.on('message', async (payload, rawMsg) => {
     if (!payload.text || payload.text === '[voice message]') return;
     
@@ -205,14 +211,12 @@ if (require.main === module) {
       const isPrivateConfirm = normalizedText === 'confirm private' || normalizedText === 'private' || normalizedText === '2' || normalizedText === 'confirm' || normalizedText === 'yes' || normalizedText === 'confirmed';
       const isConfirming = isPublicConfirm || isPrivateConfirm;
 
-      // Check if user is in a pending confirmation state
       if (isConfirming && pendingConfirms.has(payload.from)) {
         console.log(`[🤖 Bot Sync] Forwarding CONFIRMATION to backend from ${payload.from}...`);
         
         const pendingData = pendingConfirms.get(payload.from);
-        pendingConfirms.delete(payload.from); // Clear state
+        pendingConfirms.delete(payload.from);
 
-        // Override is_public based on their specific confirmation choice
         pendingData.parsed.is_public = isPublicConfirm;
 
         const response = await axios.post(`${BACKEND_URL}/api/confirm`, {
@@ -252,23 +256,32 @@ if (require.main === module) {
 
       if (result.status === 'conflict') {
         replyText = `⚠️ Conflict Detected:\n${result.conflict_message}`;
+
       } else if (result.status === 'awaiting_confirm') {
-        // Save to state machine
         pendingConfirms.set(payload.from, {
           parsed: result.parsed,
           session_id: result.session_id
         });
-
-        const f = result.parsed.features && result.parsed.features.length > 0 
+        const f = result.parsed.features?.length > 0
             ? `\n✨ Features: ${result.parsed.features.join(', ')}` : '';
         replyText = `📋 Please Confirm:\n\n📍 Block: ${result.parsed.block_id}\n📐 Size: ${result.parsed.size}gz\n💰 Demand: PKR ${result.parsed.demand_price.toLocaleString('en-PK')}${f}\n\nChoose Visibility:\n1️⃣ Reply "confirm public" (makes it visible to all brokers & searches for matches)\n2️⃣ Reply "confirm private" (saves it only in your private vault)`;
+
       } else if (result.status === 'listing_saved') {
         replyText = `🎉 Listing saved successfully in our system! Matchmaker is scanning for buyers...`;
+
       } else if (result.status === 'market_query_result') {
         const stats = result.stats || {};
         replyText = `💡 Recommender Insights:\n\n${result.advice}\n\n📊 Stats for ${result.block_id}:\nSupply: ${stats.supply || 0} plots\nDemand: ${stats.demand || 0} requests\nRatio: ${stats.demand_ratio ? Number(stats.demand_ratio).toFixed(2) : 0}`;
+
       } else if (result.status === 'demand_saved') {
-         replyText = `🔍 Searching... Demand saved. We found ${result.matches?.length || 0} immediate matches!`;
+        const count = result.match_count || 0;
+        if (count > 0 && result.immediate_matches?.length > 0) {
+          const matchLines = formatMatchListings(result.immediate_matches);
+          replyText = `🔍 Demand saved. We found ${count} immediate match(es)!\n\n${matchLines}\n\n📲 Matchmaker will notify you of new listings too.`;
+        } else {
+          replyText = `🔍 Demand saved. No immediate matches right now.\n\n📲 Matchmaker will alert you when a matching listing comes in!`;
+        }
+
       } else {
         replyText = result.message || '';
       }

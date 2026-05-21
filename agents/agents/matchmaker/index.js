@@ -62,18 +62,20 @@ export async function findAndNotifyMatches(listing) {
 export async function matchDemandToListings(parsedData, buyerAgentId) {
     const { block_id, size, max_budget, features } = parsedData;
 
+    console.log('[🔗 Matchmaker Debug] Input:', JSON.stringify({ block_id, size, max_budget, features, buyerAgentId }));
+
     if (!max_budget) {
         console.log(`[🔗 Matchmaker] No budget provided — skipping demand match`);
         return [];
     }
 
-    const flexBudget    = Math.floor(max_budget * (1 + BUDGET_FLEX));
-    const sizeMin       = Math.floor(size * (1 - SIZE_FLEX));
-    const sizeMax       = Math.ceil(size  * (1 + SIZE_FLEX));
+    const flexBudget     = Math.floor(max_budget * (1 + BUDGET_FLEX));
+    const sizeMin        = Math.floor(size * (1 - SIZE_FLEX));
+    const sizeMax        = Math.ceil(size  * (1 + SIZE_FLEX));
     const adjacentBlocks = getAdjacentBlocks(block_id);
     const allBlocks      = [block_id, ...adjacentBlocks];
 
-    console.log(`[🔗 Matchmaker] Demand search — Block: ${block_id}, Size: ${sizeMin}–${sizeMax}gz, Budget: ${max_budget} (flex: ${flexBudget})`);
+    console.log('[🔗 Matchmaker Debug] Query params:', JSON.stringify({ sizeMin, sizeMax, flexBudget, allBlocks }));
 
     const { data, error } = await supabase
         .from('listings')
@@ -86,16 +88,21 @@ export async function matchDemandToListings(parsedData, buyerAgentId) {
         .in('block_id', allBlocks)
         .neq('owner_agent_id', buyerAgentId);
 
+    console.log('[🔗 Matchmaker Debug] Results count:', data?.length, '| Error:', error?.message);
+    console.log('[🔗 Matchmaker Debug] Raw data:', JSON.stringify(data));
+
     if (error) throw new Error(`Matchmaker: Demand match failed — ${error.message}`);
 
     let results = data || [];
 
     // Feature filter — only apply when buyer specified desired features
     if (features && features.length > 0) {
+        const beforeFilter = results.length;
         results = results.filter(listing =>
             listing.features?.length > 0 &&
             features.some(f => listing.features.includes(f))
         );
+        console.log(`[🔗 Matchmaker Debug] Feature filter: ${beforeFilter} → ${results.length}`);
     }
 
     console.log(`[🔗 Matchmaker] Immediate matches: ${results.length}`);

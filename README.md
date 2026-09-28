@@ -146,8 +146,6 @@ GROUP BY block_id;
 ## 👥 Team Raabta AI
 - **Ousman**
 - **Hazib**
-- **Zunnoorain**
-- **Abdullah**
 
 ---
 *Developed for Challenge 2 - AI Service Orchestrator for Informal Economy*

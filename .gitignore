@@ -11,3 +11,4 @@ yarn-error.log*
 .env.*
 .envrc
 mobile/app/web/env.js
+docs/
